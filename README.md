@@ -1,1 +1,1 @@
-# cb-notification-service
+# cb-re notification-service
