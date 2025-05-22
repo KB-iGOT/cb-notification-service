@@ -1,0 +1,62 @@
+{
+  "actor": {
+    "id": "Certificate Generator",
+    "type": "System"
+  },
+  "context": {
+    "pdata": {
+      "ver": "1.0",
+      "id": "org.sunbird.learning.platform"
+    }
+  },
+  "edata": {
+    "basePath": "https://portal.karmayogi.nic.in/certs",
+    "courseName": "${course.name}",
+    "courseNameExtended": "${course.name.extended}",
+    "coursePosterImage": "${course.poster.image}",
+    "criteria": {
+      "narrative": "cornel_completion_certificate.svg"
+    },
+    "data": [
+      {
+        "recipientId": "${user.id}",
+        "recipientName": "${user.name}"
+      }
+    ],
+    "issuedDate": "${today.date}",
+    "issuer": {
+      "name": "in",
+      "url": "https://diksha.gov.in/gj/"
+    },
+    "name": "cornel_completion_certificate.svg",
+    "oldId": "",
+    "orgId": "01384739322653081641",
+    "primaryCategory": "External-Course",
+    "providerName": "${provider.name}",
+    "related": {
+      "courseId": "${course.id}",
+      "type": "cornel_completion_certificate.svg"
+    },
+    "signatoryList": [
+      {
+        "image": "https://diksha.gov.in/gj/header-logo.png",
+        "name": "Govt Of India",
+        "id": "in",
+        "designation": "Home Minister"
+      }
+    ],
+    "svgTemplate": "${svgTemplate}",
+    "tag": "${course.id}",
+    "templateId": "do_114104376473182208114",
+    "userId": "${user.id}"
+  },
+  "eid": "BE_JOB_REQUEST",
+  "ets": "${time.ms}",
+  "mid": "${unique.id}",
+  "object": {
+    "id": "${user.id}",
+    "type": "GenerateCertificate"
+  }
+}
+
+
