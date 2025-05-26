@@ -1,0 +1,52 @@
+package com.igot.cb;
+
+
+import com.igot.cb.util.Constants;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.http.client.ClientHttpRequestFactory;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
+
+
+
+@ComponentScan(basePackages = "com.igot.cb")
+@EntityScan("com.igot.cb")
+@SpringBootApplication
+public class CbNotificationApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(CbNotificationApplication.class, args);
+	}
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate(getClientHttpRequestFactory());
+    }
+
+    private ClientHttpRequestFactory getClientHttpRequestFactory() {
+        RequestConfig config = RequestConfig.custom()
+                .setResponseTimeout(Timeout.ofMilliseconds(Constants.HTTP_CLIENT_TIMEOUT_MS))
+                .build();
+
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        cm.setMaxTotal(Constants.HTTP_CLIENT_MAX_TOTAL_CONNECTIONS);
+        cm.setDefaultMaxPerRoute(Constants.HTTP_CLIENT_MAX_CONNECTIONS_PER_ROUTE);
+
+        CloseableHttpClient client = HttpClients.custom()
+                .setDefaultRequestConfig(config)
+                .setConnectionManager(cm)
+                .build();
+
+        return new HttpComponentsClientHttpRequestFactory(client);
+    }
+
+}
