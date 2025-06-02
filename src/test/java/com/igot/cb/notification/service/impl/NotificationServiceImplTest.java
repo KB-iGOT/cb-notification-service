@@ -7,33 +7,42 @@ import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+import com.igot.cb.util.ProjectUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 
 
+import java.lang.reflect.Method;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import static com.igot.cb.util.Constants.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class NotificationServiceImplTest {
-
+    @Spy
     @InjectMocks
     private NotificationServiceImpl notificationService;
-
+    private static final String AUTH_TOKEN = "test-auth-token";
     @Mock
     private AccessTokenValidator accessTokenValidator;
+    private static final String NOTIFICATION_ID_1 = "notification-id-1";
+    private static final String NOTIFICATION_ID_2 = "notification-id-2";
+    private static final String userId = "user-123";
 
     @Mock
     private CassandraOperation cassandraOperation;
 
     @Mock
     private ObjectMapper objectMapper;
-
+    private static final String CREATED_AT = "created_at";
+    private static final String READ = "read";
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -311,14 +320,14 @@ class NotificationServiceImplTest {
         Instant now = Instant.now();
 
         Map<String, Object> notif1 = new HashMap<>();
-        notif1.put(Constants.NOTIFICATION_ID, "n1");
+        notif1.put(NOTIFICATION_ID, "n1");
         notif1.put(Constants.USER_ID, userId);
         notif1.put(Constants.CREATED_AT, now.minusSeconds(3600));
         notif1.put(Constants.READ, false);
         notif1.put(Constants.CATEGORY, "catA");
 
         Map<String, Object> notif2 = new HashMap<>();
-        notif2.put(Constants.NOTIFICATION_ID, "n2");
+        notif2.put(NOTIFICATION_ID, "n2");
         notif2.put(Constants.USER_ID, userId);
         notif2.put(Constants.CREATED_AT, now.minusSeconds(7200));
         notif2.put(Constants.READ, true);
@@ -337,9 +346,9 @@ class NotificationServiceImplTest {
 
         assertEquals(HttpStatus.OK, response.getResponseCode());
         Map<String, Object> result = (Map<String, Object>) response.getResult();
-        List<Map<String, Object>> returnedNotifs = (List<Map<String, Object>>) result.get(Constants.NOTIFICATIONS);
+        List<Map<String, Object>> returnedNotifs = (List<Map<String, Object>>) result.get(NOTIFICATIONS);
         assertEquals(1, returnedNotifs.size());
-        assertEquals("n1", returnedNotifs.get(0).get(Constants.NOTIFICATION_ID));
+        assertEquals("n1", returnedNotifs.get(0).get(NOTIFICATION_ID));
     }
 
     @Test
@@ -398,6 +407,306 @@ class NotificationServiceImplTest {
         assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
     }
 
+    @Test
+    void testReadByUserIdAndNotificationId_Success() {
+        ApiResponse expectedResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_NOTIFICATIONID);
+        expectedResponse.setResponseCode(HttpStatus.OK);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        ApiResponse actualResponse = notificationService.readByUserIdAndNotificationId(NOTIFICATION_ID, AUTH_TOKEN);
+        assertNotNull(actualResponse);
+        assertEquals(HttpStatus.OK, actualResponse.getResponseCode());
+    }
 
+    @Test
+    void testReadByUserIdAndNotificationId_EmptyUserId() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+        ApiResponse response = notificationService.readByUserIdAndNotificationId(NOTIFICATION_ID, AUTH_TOKEN);
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testReadByUserIdAndNotificationId_Exception() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("Test exception"));
+        ApiResponse response = notificationService.readByUserIdAndNotificationId(NOTIFICATION_ID, AUTH_TOKEN);
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+        assertEquals("Internal server error while fetching notification by userId",
+                response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_Success() {
+        List<String> notificationIds = Arrays.asList(NOTIFICATION_ID_1, NOTIFICATION_ID_2);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        ApiResponse response = notificationService.markNotificationsAsDeleted(AUTH_TOKEN, notificationIds);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+        assertEquals("Notifications marked as deleted successfully", response.getParams().getErrMsg());
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertNotNull(result);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> updatedNotifications = (List<Map<String, Object>>) result.get(NOTIFICATIONS);
+        assertNotNull(updatedNotifications);
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_EmptyUserId() {
+        List<String> notificationIds = Arrays.asList(NOTIFICATION_ID_1, NOTIFICATION_ID_2);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+        ApiResponse response = notificationService.markNotificationsAsDeleted(AUTH_TOKEN, notificationIds);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_EmptyNotificationIds() {
+        List<String> notificationIds = Collections.emptyList();
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        ApiResponse response = notificationService.markNotificationsAsDeleted(AUTH_TOKEN, notificationIds);
+        assertNotNull(response);
+        assertNotEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_NullNotificationIds() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        ApiResponse response = notificationService.markNotificationsAsDeleted(AUTH_TOKEN, null);
+        assertNotNull(response);
+        assertNotEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_Exception() {
+        List<String> notificationIds = Arrays.asList(NOTIFICATION_ID_1, NOTIFICATION_ID_2);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("Test exception"));
+        ApiResponse response = notificationService.markNotificationsAsDeleted(AUTH_TOKEN, notificationIds);
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+        assertEquals("Internal server error while fetching markNotificationsAsDeleted  delete",
+                response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_Success() {
+        int days = 7;
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        List<Map<String, Object>> notificationRecords = new ArrayList<>();
+
+        Map<String, Object> unreadNotification = new HashMap<>();
+        unreadNotification.put(CREATED_AT, Instant.now().minus(2, ChronoUnit.DAYS));
+        unreadNotification.put(READ, false);
+        notificationRecords.add(unreadNotification);
+        Map<String, Object> readNotification = new HashMap<>();
+        readNotification.put(CREATED_AT, Instant.now().minus(3, ChronoUnit.DAYS));
+        readNotification.put(READ, true);
+        notificationRecords.add(readNotification);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                eq(Constants.KEYSPACE_SUNBIRD), eq(Constants.TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, USER_ID)), eq(List.of(CREATED_AT, READ)), eq(MAX_NOTIFICATIONS_FETCH_FOR_READ))).thenReturn(notificationRecords);
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(1L, result.get("unread"));
+    }
+
+
+    @Test
+    void testGetUnreadNotificationCount_EmptyUserId() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 7);
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+
+    @Test
+    void testGetUnreadNotificationCount_InvalidDays() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, -1);
+        assertNotNull(response);
+        assertNotEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_NoNotifications() {
+        int days = 7;
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                any(), any(), any(), any(), any()
+        )).thenReturn(Collections.emptyList());
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(0L, result.get("unread"));
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_Exception() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("Test exception"));
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 7);
+        assertNotNull(response);
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+        assertEquals("Internal server error while fetching unread notification count",
+                response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_OutsideDateRange() {
+        int days = 7;
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+        List<Map<String, Object>> notificationRecords = new ArrayList<>();
+
+        Map<String, Object> oldNotification = new HashMap<>();
+        oldNotification.put(CREATED_AT, Instant.now().minus(10, ChronoUnit.DAYS));
+        oldNotification.put(READ, false);
+        notificationRecords.add(oldNotification);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), any())).thenReturn(notificationRecords);
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(0L, result.get("unread"));
+    }
+
+    @Test
+    void testProcessReadUpdate_AllScenarios() throws Exception {
+        // Notification not found
+        List<Map<String, Object>> notifications = List.of(
+                Map.of(NOTIFICATION_ID, "not-matching-id", READ, false)
+        );
+
+        List<String> targetIds = List.of(NOTIFICATION_ID);
+
+        // Use reflection to invoke private method
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "processReadUpdate", String.class, List.class, List.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(
+                notificationService, USER_ID, notifications, targetIds);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testProcessReadUpdate_MarkUnreadAsRead_Success() throws Exception {
+        Instant createdAt = Instant.now();
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(NOTIFICATION_ID, NOTIFICATION_ID);
+        notification.put(READ, false);
+        notification.put(CREATED_AT, createdAt);
+
+        List<Map<String, Object>> notifications = List.of(notification);
+        List<String> targetIds = List.of(NOTIFICATION_ID);
+
+        Map<String, Object> updateResponse = Map.of(Constants.RESPONSE, Constants.SUCCESS);
+
+        when(cassandraOperation.updateRecordByCompositeKey(
+                eq(Constants.KEYSPACE_SUNBIRD),
+                eq(Constants.TABLE_USER_NOTIFICATION),
+                anyMap(),
+                anyMap()
+        )).thenReturn(updateResponse);
+
+        // Mock fetchNotifications
+        Method fetchMethod = NotificationServiceImpl.class.getDeclaredMethod("fetchNotifications", String.class);
+        fetchMethod.setAccessible(true);
+        ReflectionTestUtils.setField(notificationService, "cassandraOperation", cassandraOperation);
+
+        doReturn(List.of(notification)).when(cassandraOperation).getRecordsByPropertiesWithoutFiltering(
+                any(), any(), anyMap(), any(), anyInt());
+
+        // Invoke processReadUpdate
+        Method processMethod = NotificationServiceImpl.class.getDeclaredMethod(
+                "processReadUpdate", String.class, List.class, List.class);
+        processMethod.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> result = (List<Map<String, Object>>) processMethod.invoke(
+                notificationService, USER_ID, notifications, targetIds);
+
+        assertEquals(1, result.size());
+        assertEquals(NOTIFICATION_ID, result.get(0).get(ID));
+    }
+
+    @Test
+    void testUpdateNotification_NotificationFound() throws Exception {
+        Instant createdAt = Instant.now();
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(NOTIFICATION_ID, NOTIFICATION_ID);
+        notification.put(CREATED_AT, createdAt);
+
+        List<Map<String, Object>> notifications = List.of(notification);
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                any(), any(), anyMap(), any(), anyInt()
+        )).thenReturn(notifications);
+
+        when(cassandraOperation.updateRecordByCompositeKey(
+                any(), any(), anyMap(), anyMap()
+        )).thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "updateNotification", String.class, String.class, Map.class);
+        method.setAccessible(true);
+
+        Map<String, Object> updateMap = Map.of(READ, true, READ_AT, Instant.now());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) method.invoke(
+                notificationService, USER_ID, NOTIFICATION_ID, updateMap);
+
+        assertEquals(Constants.SUCCESS, result.get(Constants.RESPONSE));
+    }
+
+    @Test
+    void testUpdateNotification_NotificationNotFound() throws Exception {
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                any(), any(), anyMap(), any(), anyInt()
+        )).thenReturn(Collections.emptyList());
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "updateNotification", String.class, String.class, Map.class);
+        method.setAccessible(true);
+
+        Map<String, Object> updateMap = Map.of(READ, true, READ_AT, Instant.now());
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) method.invoke(
+                notificationService, USER_ID, NOTIFICATION_ID, updateMap);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testFetchNotifications() throws Exception {
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(USER_ID, USER_ID);
+        notification.put(NOTIFICATION_ID, NOTIFICATION_ID);
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                any(), any(), anyMap(), any(), anyInt()
+        )).thenReturn(List.of(notification));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "fetchNotifications", String.class);
+        method.setAccessible(true);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> result = (List<Map<String, Object>>) method.invoke(
+                notificationService, USER_ID);
+
+        assertEquals(1, result.size());
+        assertEquals(NOTIFICATION_ID, result.get(0).get(NOTIFICATION_ID));
+    }
 }
-

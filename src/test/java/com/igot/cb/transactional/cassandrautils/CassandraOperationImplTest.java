@@ -1,18 +1,17 @@
 package com.igot.cb.transactional.cassandrautils;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.PreparedStatement;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.cql.*;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.lang.reflect.Method;
@@ -48,6 +47,21 @@ public class CassandraOperationImplTest {
 
     @InjectMocks
     private CassandraOperationImpl cassandraOperation;
+
+    private List<Map<String, Object>> requestList;
+
+    private String keyspace = "test_ks";
+    private String table = "test_table";
+    private Map<String, Object> updateAttributes;
+    private Map<String, Object> compositeKey;
+
+    @Before
+    public void setUp() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", UUID.randomUUID());
+        map.put("name", "Test User");
+        requestList = Collections.singletonList(map);
+    }
 
     @Test
     public void testProcessQuery() throws Exception {
@@ -517,4 +531,76 @@ public class CassandraOperationImplTest {
         assertTrue(result.contains("where id = ?"));
     }
 
+
+    @Test
+    public void testInsertBulkRecordSuccess() {
+        String keyspace = "test_ks";
+        String table = "test_table";
+
+        when(connectionManager.getSession(keyspace)).thenReturn(session);
+        when(session.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(Mockito.any())).thenReturn(boundStatement);
+
+        // Simulate batch execution
+        doAnswer(invocation -> null).when(session).execute(any(BatchStatement.class));
+
+        // Mock static utility (if CassandraUtil.getPreparedStatement is static)
+        try (MockedStatic<CassandraUtil> mockedUtil = Mockito.mockStatic(CassandraUtil.class)) {
+            mockedUtil.when(() -> CassandraUtil.getPreparedStatement(eq(keyspace), eq(table), anyMap()))
+                    .thenReturn("INSERT INTO test_table (id, name) VALUES (?, ?)");
+
+            Object result = cassandraOperation.insertBulkRecord(keyspace, table, requestList);
+            assertEquals(Constants.SUCCESS, ((ApiResponse) result).get(Constants.RESPONSE));
+        }
+    }
+
+    @Test
+    public void testInsertBulkRecordException() {
+        String keyspace = "test_ks";
+        String table = "test_table";
+
+        when(connectionManager.getSession(keyspace)).thenThrow(new RuntimeException("DB error"));
+
+        Object result = cassandraOperation.insertBulkRecord(keyspace, table, requestList);
+
+        ApiResponse response = (ApiResponse) result;
+        assertEquals(Constants.FAILED, response.get(Constants.RESPONSE));
+        assertEquals(true, response.get(Constants.ERROR_MESSAGE).toString().contains("Exception occurred while inserting"));
+    }
+
+    @Test
+    public void testUpdateRecordByCompositeKeySuccess() {
+        Map<String, Object> updateAttributes = new HashMap<>();
+        updateAttributes.put("column1", "newValue");
+
+        Map<String, Object> compositeKey = new HashMap<>();
+        compositeKey.put("id", "123");
+
+        when(connectionManager.getSession(keyspace)).thenReturn(session);
+        when(session.execute(any(SimpleStatement.class))).thenReturn(resultSet);
+
+        Map<String, Object> response = cassandraOperation.updateRecordByCompositeKey(
+                keyspace, table, updateAttributes, compositeKey);
+
+        assertEquals(Constants.SUCCESS, response.get(Constants.RESPONSE));
+        assertNull(response.get(Constants.ERROR_MESSAGE));
+        verify(session, times(1)).execute(any(SimpleStatement.class));
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testUpdateRecordByCompositeKeyException() {
+        updateAttributes = new HashMap<>();
+        updateAttributes.put("name", "Updated Name");
+
+        compositeKey = new HashMap<>();
+        compositeKey.put("id", UUID.randomUUID());
+        when(connectionManager.getSession(keyspace)).thenThrow(new RuntimeException("Simulated DB error"));
+
+        try {
+            cassandraOperation.updateRecordByCompositeKey(keyspace, table, updateAttributes, compositeKey);
+        } catch (RuntimeException e) {
+            assertTrue(e.getMessage().contains("Simulated DB error"));
+            throw e;
+        }
+    }
 }
