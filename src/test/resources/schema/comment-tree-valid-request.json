@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "properties": {
+    "exampleField": {
+      "type": "string"
+    }
+  },
+  "required": ["exampleField"]
+}
