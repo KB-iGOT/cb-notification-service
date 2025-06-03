@@ -709,4 +709,97 @@ class NotificationServiceImplTest {
         assertEquals(1, result.size());
         assertEquals(NOTIFICATION_ID, result.get(0).get(NOTIFICATION_ID));
     }
+
+    @Test
+    void testMarkNotificationsAsRead_InternalServerError() {
+        // Mocked input
+        String authToken = "Bearer token";
+        String userId = "user123";
+        String notificationId = "notif001";
+        Instant createdAt = Instant.now();
+
+        Map<String, Object> request = Map.of("type", "all");
+
+        Map<String, Object> notification = new HashMap<>();
+        notification.put("notificationId", notificationId);
+        notification.put("read", false);
+        notification.put("createdAt", createdAt);
+
+        List<Map<String, Object>> notifications = List.of(notification);
+
+        Map<String, Object> successUpdateResponse = Map.of("response", "SUCCESS");
+
+        // Mocks
+        Mockito.when(accessTokenValidator.fetchUserIdFromAccessToken(authToken))
+                .thenReturn(userId);
+
+        Mockito.when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                        eq(Constants.KEYSPACE_SUNBIRD),
+                        eq(Constants.TABLE_USER_NOTIFICATION),
+                        anyMap(),
+                        isNull(),
+                        anyInt()))
+                .thenReturn(notifications);
+
+        Mockito.when(cassandraOperation.updateRecordByCompositeKey(
+                        eq(Constants.KEYSPACE_SUNBIRD),
+                        eq(Constants.TABLE_USER_NOTIFICATION),
+                        anyMap(),
+                        anyMap()))
+                .thenReturn(successUpdateResponse);
+
+        // Call method
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+
+        // Assertions
+        assertNotNull(response);
+        assertEquals("Internal server error while updating notifications", response.getParams().getErrMsg());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_InvalidUser() {
+        // Mocked input
+        String authToken = "Bearer token";
+        String notificationId = "notif001";
+        Instant createdAt = Instant.now();
+
+        Map<String, Object> request = Map.of("type", "all");
+
+        Map<String, Object> notification = new HashMap<>();
+        notification.put("notificationId", notificationId);
+        notification.put("read", false);
+        notification.put("createdAt", createdAt);
+
+        List<Map<String, Object>> notifications = List.of(notification);
+
+        Map<String, Object> successUpdateResponse = Map.of("response", "SUCCESS");
+
+        // Mocks
+        Mockito.when(accessTokenValidator.fetchUserIdFromAccessToken(authToken))
+                .thenReturn(null);
+
+        Mockito.when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                        eq(Constants.KEYSPACE_SUNBIRD),
+                        eq(Constants.TABLE_USER_NOTIFICATION),
+                        anyMap(),
+                        isNull(),
+                        anyInt()))
+                .thenReturn(notifications);
+
+        Mockito.when(cassandraOperation.updateRecordByCompositeKey(
+                        eq(Constants.KEYSPACE_SUNBIRD),
+                        eq(Constants.TABLE_USER_NOTIFICATION),
+                        anyMap(),
+                        anyMap()))
+                .thenReturn(successUpdateResponse);
+
+        // Call method
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+
+        // Assertions
+        assertNotNull(response);
+        assertEquals("User Id doesn't exist! Please supply a valid auth token", response.getParams().getErrMsg());
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
 }

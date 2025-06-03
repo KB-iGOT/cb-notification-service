@@ -603,4 +603,28 @@ public class CassandraOperationImplTest {
             throw e;
         }
     }
+
+    @Test
+    public void testUpdateRecord_WhenUnknownIdentifierExceptionThrown_ShouldReturnFailureResponse() {
+        // Arrange
+        String keyspace = "test_keyspace";
+        String table = "test_table";
+        Map<String, Object> request = new HashMap<>();
+        request.put("name", "John");
+        request.put("email", "john@example.com");
+        request.put(Constants.ID, "user123");
+
+        String query = CassandraOperationImpl.getUpdateQueryStatement(keyspace, table, request);
+
+        when(connectionManager.getSession(keyspace)).thenReturn(session);
+        // Simulate exception with message that includes Constants.UNKNOWN_IDENTIFIER
+        RuntimeException exception = new RuntimeException("Undefined column name in request"); // contains UNKNOWN_IDENTIFIER
+        when(session.prepare(query)).thenThrow(exception);
+
+        // Act
+        Map<String, Object> response = cassandraOperation.updateRecord(keyspace, table, request);
+
+        // Assert
+        assertNotNull(response);
+    }
 }

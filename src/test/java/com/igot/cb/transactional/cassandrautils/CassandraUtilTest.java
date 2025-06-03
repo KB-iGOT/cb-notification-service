@@ -1,15 +1,13 @@
 package com.igot.cb.transactional.cassandrautils;
 
-import com.datastax.oss.driver.api.core.CqlIdentifier;
-import com.datastax.oss.driver.api.core.cql.ColumnDefinition;
+
 import com.datastax.oss.driver.api.core.cql.ColumnDefinitions;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.metadata.schema.ColumnMetadata;
 import com.igot.cb.util.Constants;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -125,5 +123,25 @@ public class CassandraUtilTest {
             assertEquals("123", rowMap.get("userId"));
             assertEquals("test@example.com", rowMap.get("email"));
         }
+    }
+
+    @Test
+    public void testFetchColumnsMapping() {
+        // Mock ColumnMetadata
+        ColumnMetadata column1 = mock(ColumnMetadata.class);
+        ColumnMetadata column2 = mock(ColumnMetadata.class);
+
+        // Mock ColumnDefinitions
+        ColumnDefinitions columnDefinitions = mock(ColumnDefinitions.class);
+
+        // Mock ResultSet
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.getColumnDefinitions()).thenReturn(columnDefinitions);
+        // Call the method
+        Map<String, String> result = CassandraUtil.fetchColumnsMapping(resultSet);
+
+        // Assert the mapping
+        assertEquals(0, result.size());
+
     }
 }

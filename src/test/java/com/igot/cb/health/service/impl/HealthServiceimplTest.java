@@ -22,6 +22,9 @@ class HealthServiceImplTest {
     @Mock
     private CassandraOperation cassandraOperation;
 
+    @Mock
+    private ApiResponse response;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -87,5 +90,21 @@ class HealthServiceImplTest {
         assertFalse((Boolean) cassandraCheck.get(Constants.HEALTHY));
     }
 
+    @Test
+    void testCheckHealthStatus_whenCassandraHealthCheckThrows_setsInternalServerError() throws Exception {
+        // Spy to partially mock the service
+        HealthServiceImpl spyService = Mockito.spy(healthService);
+
+        // Force cassandraHealthStatus to throw exception
+        doThrow(new RuntimeException("Simulated failure")).when(spyService).cassandraHealthStatus(any(ApiResponse.class));
+
+        // Invoke the method
+        ApiResponse response = spyService.checkHealthStatus();
+
+        // Assert response is marked as failed
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+        assertEquals("Simulated failure", response.getParams().getErr());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
 
 }
