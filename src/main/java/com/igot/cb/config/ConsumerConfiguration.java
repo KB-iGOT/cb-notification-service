@@ -1,12 +1,10 @@
 package com.igot.cb.config;
 
-import com.igot.cb.util.CbServerProperties;
-import com.igot.cb.util.PropertiesCache;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.KafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
@@ -16,8 +14,8 @@ import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.igot.cb.util.Constants.SPRING_KAFKA_BOOTSTRAP_SETTINGS;
 
+@Configuration
 public class ConsumerConfiguration {
 
     @Value("${spring.kafka.bootstrap.servers}")
@@ -34,9 +32,6 @@ public class ConsumerConfiguration {
 
     @Value("${kafka.auto.commit.interval.ms}")
     private Integer kafkaAutoCommitInterval;
-
-    @Autowired
-    private CbServerProperties cbServerProperties;
 
     @Bean
     KafkaListenerContainerFactory<ConcurrentMessageListenerContainer<String, String>> kafkaListenerContainerFactory() {
@@ -57,7 +52,7 @@ public class ConsumerConfiguration {
     @Bean
     public Map<String, Object> consumerConfigs() {
         Map<String, Object> propsMap = new HashMap<>();
-        propsMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, PropertiesCache.getInstance().getProperty(cbServerProperties.getSpringKafkaBootStrapServers()));
+        propsMap.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkabootstrapAddress);
         propsMap.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
         propsMap.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "1000");
         propsMap.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, kafkaAutoCommitInterval);
