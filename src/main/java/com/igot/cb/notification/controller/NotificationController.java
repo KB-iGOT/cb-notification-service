@@ -87,5 +87,13 @@ public class NotificationController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
+    @GetMapping("/reset/unread/count")
+    public ResponseEntity<?> getResetNotificationCount(
+            @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
+
+        ApiResponse response = notificationService.getResetNotificationCount(token);
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
 
 }

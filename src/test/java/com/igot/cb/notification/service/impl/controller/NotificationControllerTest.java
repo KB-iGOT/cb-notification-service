@@ -150,4 +150,18 @@ class NotificationControllerTest {
         assertEquals(apiResponse, response.getBody());
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
+
+    @Test
+    void testGetResetNotificationCount() {
+        String token = "token";
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setResponseCode(HttpStatus.OK);
+
+        when(notificationService.getResetNotificationCount(eq(token))).thenReturn(apiResponse);
+
+        ResponseEntity<?> response = notificationController.getResetNotificationCount(token);
+
+        assertEquals(apiResponse, response.getBody());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 }

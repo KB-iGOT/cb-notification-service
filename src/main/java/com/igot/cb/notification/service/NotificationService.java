@@ -24,5 +24,7 @@ public interface NotificationService {
 
     ApiResponse getUnreadNotificationCount(String token, int days);
 
+    ApiResponse getResetNotificationCount(String token);
+
 
 }

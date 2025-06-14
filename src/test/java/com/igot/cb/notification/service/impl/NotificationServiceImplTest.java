@@ -492,29 +492,7 @@ class NotificationServiceImplTest {
                 response.getParams().getErrMsg());
     }
 
-    @Test
-    void testGetUnreadNotificationCount_Success() {
-        int days = 7;
-        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
-        List<Map<String, Object>> notificationRecords = new ArrayList<>();
 
-        Map<String, Object> unreadNotification = new HashMap<>();
-        unreadNotification.put(CREATED_AT, Instant.now().minus(2, ChronoUnit.DAYS));
-        unreadNotification.put(READ, false);
-        notificationRecords.add(unreadNotification);
-        Map<String, Object> readNotification = new HashMap<>();
-        readNotification.put(CREATED_AT, Instant.now().minus(3, ChronoUnit.DAYS));
-        readNotification.put(READ, true);
-        notificationRecords.add(readNotification);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
-                eq(Constants.KEYSPACE_SUNBIRD), eq(Constants.TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, USER_ID)), eq(List.of(CREATED_AT, READ)), eq(MAX_NOTIFICATIONS_FETCH_FOR_READ))).thenReturn(notificationRecords);
-        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
-
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        Map<String, Object> result = (Map<String, Object>) response.getResult();
-        assertEquals(1L, result.get("unread"));
-    }
 
 
     @Test
@@ -535,47 +513,6 @@ class NotificationServiceImplTest {
         assertNotEquals(HttpStatus.OK, response.getResponseCode());
     }
 
-    @Test
-    void testGetUnreadNotificationCount_NoNotifications() {
-        int days = 7;
-        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
-                any(), any(), any(), any(), any()
-        )).thenReturn(Collections.emptyList());
-        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        Map<String, Object> result = (Map<String, Object>) response.getResult();
-        assertEquals(0L, result.get("unread"));
-    }
-
-    @Test
-    void testGetUnreadNotificationCount_Exception() {
-        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("Test exception"));
-        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 7);
-        assertNotNull(response);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
-        assertEquals("Internal server error while fetching unread notification count",
-                response.getParams().getErrMsg());
-    }
-
-    @Test
-    void testGetUnreadNotificationCount_OutsideDateRange() {
-        int days = 7;
-        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
-        List<Map<String, Object>> notificationRecords = new ArrayList<>();
-
-        Map<String, Object> oldNotification = new HashMap<>();
-        oldNotification.put(CREATED_AT, Instant.now().minus(10, ChronoUnit.DAYS));
-        oldNotification.put(READ, false);
-        notificationRecords.add(oldNotification);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), any())).thenReturn(notificationRecords);
-        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, days);
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        Map<String, Object> result = (Map<String, Object>) response.getResult();
-        assertEquals(0L, result.get("unread"));
-    }
 
     @Test
     void testProcessReadUpdate_AllScenarios() throws Exception {
@@ -802,4 +739,76 @@ class NotificationServiceImplTest {
         assertEquals("User Id doesn't exist! Please supply a valid auth token", response.getParams().getErrMsg());
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
     }
+
+    @Test
+    void testGetUnreadNotificationCount_success_withExistingRecord() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+
+        Map<String, Object> record = Map.of(Constants.COUNT, 10);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), anyString(), anyMap(), anyList(), eq(1)))
+                .thenReturn(List.of(record));
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 5);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertNotNull(response.getResult());
+        assertEquals(10, ((Map<?, ?>) response.getResult()).get("unread"));
+    }
+
+
+    @Test
+    void testGetUnreadNotificationCount_badRequest_whenUserIdMissing() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 5);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_internalServerError_onException() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("DB failure"));
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 5);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+    @Test
+    void testGetResetNotificationCount_success() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
+
+        when(cassandraOperation.updateRecordByCompositeKey(
+                anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));
+
+        ApiResponse response = notificationService.getResetNotificationCount(AUTH_TOKEN);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testGetResetNotificationCount_badRequest_whenUserIdMissing() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+
+        ApiResponse response = notificationService.getResetNotificationCount(AUTH_TOKEN);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testGetResetNotificationCount_internalServerError_onException() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenThrow(new RuntimeException("DB error"));
+
+        ApiResponse response = notificationService.getResetNotificationCount(AUTH_TOKEN);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+
+
+
 }

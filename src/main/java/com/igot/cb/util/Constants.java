@@ -420,11 +420,13 @@ public class Constants {
     public static final String USER_NOTIFICATION_CREATE = "notification.v1.create";
     public static final String USER_NOTIFICATION_BULK_CREATE = "notification.v1.bulk.create";
     public static final String TABLE_USER_NOTIFICATION = "notifications";
+    public static final String TABLE_UNREAD_NOTIFICATION_COUNT   ="unread_notification_counts";
     public static final String USER_NOTIFICATION_READ_NOTIFICATIONID = "notification.v1.readby.useridnotificationid";
     public static final String USER_NOTIFICATION_READ_N_DAYSID = "notification.v1.readby.ndays";
     public static final String USER_NOTIFICATION_READ_UPDATEID = "notification.v1.update.notificationid";
     public static final String USER_NOTIFICATION_DELETE = "notification.v1.delete.notificationid";
-    public static final String USEE_NOTIFICATION_UNREAD_COUNT = "notification.v1.unread.count";
+    public static final String USER_NOTIFICATION_UNREAD_COUNT = "notification.v1.unread.count";
+    public static final String USER_NOTIFICATION_UNREAD_RESET_COUNT = "notification.v1.unread.reset.count";
     public static final Integer MAX_NOTIFICATION_READ_BATCH_SIZE = 20;
     public static final String ALL = "all";
     public static final String UNREAD = "unread";
@@ -445,6 +447,7 @@ public class Constants {
     public static final String TABLE_SYSTEM_SETTINGS = "system_settings";
 
     public static final String SPRING_KAFKA_BOOTSTRAP_SETTINGS = "spring.kafka.bootstrap.servers";
+    public static final String USERID = "userId";
 
 
     private Constants() {

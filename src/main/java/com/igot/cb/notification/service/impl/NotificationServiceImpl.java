@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
+import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.util.ApiResponse;
@@ -93,6 +94,9 @@ public class NotificationServiceImpl implements NotificationService {
             );
             log.info("Inserted notification: {}", res.toString());
 
+
+            incrementUnreadCountManually(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, userId);
+
             Map<String, Object> responseMap = new HashMap<>(dbMap);
             Map<String, Object> resultMap = prepareNotificationResponse(responseMap);
 
@@ -108,7 +112,6 @@ public class NotificationServiceImpl implements NotificationService {
 
         return outgoingResponse;
     }
-
 
     @Override
     public ApiResponse bulkCreateNotifications(JsonNode userNotificationDetail) {
@@ -140,6 +143,8 @@ public class NotificationServiceImpl implements NotificationService {
             ZoneId zoneId = ZoneId.of(UTC);
             Instant instant = LocalDateTime.now().atZone(zoneId).toInstant();
 
+            List<String> userIdsForCountUpdate = new ArrayList<>();
+
             for (JsonNode userIdNode : userIdsNode) {
                 JsonNode idNode = userIdNode.get("user_id");
                 String userId = (idNode != null) ? idNode.asText() : null;
@@ -149,6 +154,7 @@ public class NotificationServiceImpl implements NotificationService {
                     continue;
                 }
 
+                userIdsForCountUpdate.add(userId);
 
                 Map<String, Object> dbMap = new HashMap<>();
                 dbMap.put(Constants.NOTIFICATION_ID, java.util.UUID.randomUUID().toString());
@@ -179,12 +185,16 @@ public class NotificationServiceImpl implements NotificationService {
                     notificationRecords
             );
 
-
             if (insertResponse instanceof ApiResponse apiResponse &&
                     Constants.FAILED.equals(apiResponse.get(Constants.RESPONSE))) {
                 log.error("Bulk notification insertion failed: {}", apiResponse.getParams().getErrMsg());
                 updateErrorDetails(outgoingResponse, "Failed to insert notifications", HttpStatus.INTERNAL_SERVER_ERROR);
                 return outgoingResponse;
+            }
+
+
+            for (String userId : userIdsForCountUpdate) {
+                incrementUnreadCountManually(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, userId);
             }
 
             List<Map<String, Object>> responseList = notificationRecords.stream()
@@ -202,6 +212,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         return outgoingResponse;
     }
+
 
 
     @Override
@@ -242,7 +253,6 @@ public class NotificationServiceImpl implements NotificationService {
         return outgoingResponse;
     }
 
-
     @Override
     public ApiResponse getNotificationsByUserIdAndLastXDays(String authToken, int days, int page, int size, NotificationReadStatus status, String subTypeFilter) {
         log.info("NotificationService::readByUserIdAndLastXDaysNotifications: inside the method");
@@ -281,7 +291,6 @@ public class NotificationServiceImpl implements NotificationService {
                     })
                     .toList();
 
-
             Map<String, Map<String, Integer>> subTypeCountMap = new HashMap<>();
             for (Map<String, Object> notification : statFiltered) {
                 String cat = (String) notification.getOrDefault(SUB_TYPE, ALL);
@@ -294,8 +303,8 @@ public class NotificationServiceImpl implements NotificationService {
 
             List<Map<String, Object>> subTypeStats = subTypeCountMap.entrySet().stream()
                     .map(this::buildSubTypeStat)
+                    .sorted(Comparator.comparingInt(stat -> getFixedOrderIndex((String) stat.get(NAME))))
                     .toList();
-
 
             List<Map<String, Object>> finalFiltered = statFiltered.stream()
                     .filter(notification -> {
@@ -306,7 +315,6 @@ public class NotificationServiceImpl implements NotificationService {
                         return true;
                     })
                     .toList();
-
 
             int total = finalFiltered.size();
             int fromIndex = Math.min(page * size, total);
@@ -325,7 +333,6 @@ public class NotificationServiceImpl implements NotificationService {
             resultMap.put(HAS_NEXT_PAGE, toIndex < total);
             resultMap.put(SUBTYPE_STATS, subTypeStats);
 
-
             response.setResponseCode(HttpStatus.OK);
             response.setResult(resultMap);
             log.info("NotificationServiceImpl::readByUserIdAndLastXDaysNotifications: list retrieved successfully");
@@ -340,7 +347,6 @@ public class NotificationServiceImpl implements NotificationService {
         return response;
     }
 
-
     private Map<String, Object> buildSubTypeStat(Map.Entry<String, Map<String, Integer>> entry) {
         Map<String, Object> stat = new HashMap<>();
         stat.put(NAME, entry.getKey());
@@ -348,6 +354,15 @@ public class NotificationServiceImpl implements NotificationService {
         stat.put(UNREAD, entry.getValue().getOrDefault(UNREAD, 0));
         return stat;
     }
+
+    private int getFixedOrderIndex(String subType) {
+        try {
+            return NotificationSubType.valueOf(subType.toUpperCase()).ordinal();
+        } catch (IllegalArgumentException e) {
+            return Integer.MAX_VALUE;
+        }
+    }
+
 
     @Override
     public ApiResponse markNotificationsAsRead(String authToken, Map<String, Object> request) {
@@ -515,77 +530,106 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public ApiResponse getUnreadNotificationCount(String authToken, int days) {
         log.info("NotificationService::getUnreadNotificationCount: inside the method");
-        ApiResponse response = ProjectUtil.createDefaultResponse(USEE_NOTIFICATION_UNREAD_COUNT);
+
+        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_UNREAD_COUNT);
+
+        try {
+
+            String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
+            if (StringUtils.isEmpty(userId)) {
+                updateErrorDetails(outgoingResponse, Constants.USER_ID_DOESNT_EXIST, HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
+            ApiResponse daysValidationResponse = validateDays(days);
+            if (daysValidationResponse != null && daysValidationResponse.getResponseCode() != null &&
+                    !HttpStatus.OK.equals(daysValidationResponse.getResponseCode())) {
+                return daysValidationResponse;
+            }
+
+            int unreadCount = 0;
+            Map<String, Object> criteria = Map.of(Constants.USER_ID, userId);
+
+            List<Map<String, Object>> countRecords = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                    Constants.KEYSPACE_SUNBIRD,
+                    Constants.TABLE_UNREAD_NOTIFICATION_COUNT,
+                    criteria,
+                    List.of(COUNT),
+                    1
+            );
+
+            if (countRecords != null && !countRecords.isEmpty()) {
+                Map<String, Object> record = countRecords.get(0);
+                if (record != null) {
+                    Object countObj = record.get(COUNT);
+                    if (countObj instanceof Number) {
+                        unreadCount = ((Number) countObj).intValue();
+                    }
+                }
+            } else {
+                Map<String, Object> insertMap = new HashMap<>();
+                insertMap.put(Constants.USER_ID, userId);
+                insertMap.put(COUNT, 0);
+                cassandraOperation.insertRecord(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, insertMap);
+            }
+
+            log.info("Fetched unread count for userId {}: {}", userId, unreadCount);
+            outgoingResponse.setResponseCode(HttpStatus.OK);
+            outgoingResponse.setResult(Map.of("unread", unreadCount));
+
+        } catch (Exception e) {
+            log.error("Error in getUnreadNotificationCount: {}", e.getMessage(), e);
+            updateErrorDetails(outgoingResponse,
+                    "Internal server error while fetching unread notification count",
+                    HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        return outgoingResponse;
+    }
+
+
+    @Override
+    public ApiResponse getResetNotificationCount(String authToken) {
+        log.info("NotificationService::getResetNotificationCount - Start");
+
+        ApiResponse response = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_UNREAD_RESET_COUNT);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
-            if (StringUtils.isEmpty(userId)) {
+
+            if (StringUtils.isBlank(userId)) {
+                log.warn("User ID not found from token.");
                 updateErrorDetails(response, Constants.USER_ID_DOESNT_EXIST, HttpStatus.BAD_REQUEST);
                 return response;
             }
 
-            ApiResponse daysValidationResponse = validateDays(days);
-            if (ObjectUtils.isNotEmpty(daysValidationResponse)) {
-                return daysValidationResponse;
-            }
+            Map<String, Object> updateAttributes = Map.of(COUNT, 0);
+            Map<String, Object> compositeKey = Map.of(Constants.USER_ID, userId);
 
-            Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
-
-            List<Map<String, Object>> notificationRecords = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            Map<String, Object> updateResponse = cassandraOperation.updateRecordByCompositeKey(
                     Constants.KEYSPACE_SUNBIRD,
-                    Constants.TABLE_USER_NOTIFICATION,
-                    Map.of(USER_ID, userId),
-                    List.of(CREATED_AT, READ),
-                    MAX_NOTIFICATIONS_FETCH_FOR_READ
+                    Constants.TABLE_UNREAD_NOTIFICATION_COUNT,
+                    updateAttributes,
+                    compositeKey
             );
 
-            long unreadCount = notificationRecords.stream()
-                    .filter(notificationRecord -> isUnreadAndWithinDateRange(notificationRecord, fromDate))
-                    .count();
+            if (!Constants.SUCCESS.equals(updateResponse.get(Constants.RESPONSE))) {
+                log.warn("Failed to reset unread count for userId: {}", userId);
+            } else {
+                log.info("Unread count successfully reset to 0 for userId: {}", userId);
+            }
 
             response.setResponseCode(HttpStatus.OK);
-            response.setResult(Map.of("unread", unreadCount));
 
         } catch (Exception e) {
-            log.error("Error in getUnreadNotificationCount: {}", e.getMessage(), e);
+            log.error("Exception in getResetNotificationCount: {}", e.getMessage(), e);
             updateErrorDetails(response,
-                    "Internal server error while fetching unread notification count",
+                    "Internal server error while resetting unread notification count",
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         return response;
     }
-
-    private boolean isUnreadAndWithinDateRange(Map<String, Object> notificationRecord, Instant fromDate) {
-        if (notificationRecord == null) return false;
-
-        Optional<Instant> createdAtOpt = parseCreatedAt(notificationRecord.get(CREATED_AT));
-        if (createdAtOpt.isEmpty() || createdAtOpt.get().isBefore(fromDate)) {
-            return false;
-        }
-
-        Object readFlag = notificationRecord.get(READ);
-        return Boolean.FALSE.equals(readFlag);
-    }
-
-    private Optional<Instant> parseCreatedAt(Object createdAtObj) {
-        if (createdAtObj instanceof Instant instant) {
-            return Optional.of(instant);
-        }
-
-        if (createdAtObj instanceof String createdAtStr) {
-            try {
-                return Optional.of(Instant.parse(createdAtStr));
-            } catch (DateTimeParseException e) {
-                log.debug("Invalid CREATED_AT string format: {}", createdAtStr, e);
-            }
-        } else if (createdAtObj != null) {
-            log.debug("Unexpected CREATED_AT type: {}", createdAtObj);
-        }
-
-        return Optional.empty();
-    }
-
 
     private String validateNotificationReadRequest(List<String> ids, ApiResponse response) {
         if (org.springframework.util.CollectionUtils.isEmpty(ids)) {
@@ -689,5 +733,40 @@ public class NotificationServiceImpl implements NotificationService {
         }
         return null;
     }
+
+    private void incrementUnreadCountManually(String keyspace, String table, String userId) {
+        try {
+            Map<String, Object> whereClause = new HashMap<>();
+            whereClause.put(USER_ID, userId);
+
+            List<String> fields = Collections.singletonList(COUNT);
+            List<Map<String, Object>> records = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                    keyspace, table, whereClause, fields, 1
+            );
+
+            int updatedCount = 1;
+
+            if (!records.isEmpty() && records.get(0).get(COUNT) != null) {
+                int currentCount = (int) records.get(0).get(COUNT);
+                updatedCount = currentCount + 1;
+            }
+
+            Map<String, Object> updateAttributes = new HashMap<>();
+            updateAttributes.put(COUNT, updatedCount);
+
+            cassandraOperation.updateRecordByCompositeKey(
+                    keyspace,
+                    table,
+                    updateAttributes,
+                    whereClause
+            );
+
+            log.info("Unread notification count updated for user {}: {}", userId, updatedCount);
+        } catch (Exception e) {
+            log.error("Error updating unread count for user {}: {}", userId, e.getMessage(), e);
+        }
+    }
+
+
 
 }
