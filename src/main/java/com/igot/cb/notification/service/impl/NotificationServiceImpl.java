@@ -7,6 +7,8 @@ import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
+import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
+import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
@@ -41,6 +43,9 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private NotificationSettingRepository notificationSettingRepository;
+
     private final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
 
     @Override
@@ -52,6 +57,30 @@ public class NotificationServiceImpl implements NotificationService {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
             if (StringUtils.isEmpty(userId)) {
                 updateErrorDetails(outgoingResponse, Constants.USER_ID_DOESNT_EXIST, HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
+            JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
+            if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
+                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
+                updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
+            String notificationType = requestNode.path(TYPE).asText(null);
+            if (StringUtils.isBlank(notificationType)) {
+                updateErrorDetails(outgoingResponse, "Notification type is required", HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
+            Optional<NotificationSettingEntity> settingOpt =
+                    notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(userId, notificationType);
+
+            if (settingOpt.isPresent() && !settingOpt.get().isEnabled()) {
+                log.info("User '{}' has disabled notification type '{}'. Skipping notification creation.", userId, notificationType);
+                outgoingResponse.setResponseCode(HttpStatus.OK);
+                outgoingResponse.getParams().setErrMsg("Notification not created as it is disabled by the user.");
+                outgoingResponse.getParams().setStatus(Constants.SUCCESS);
                 return outgoingResponse;
             }
 
@@ -67,7 +96,6 @@ public class NotificationServiceImpl implements NotificationService {
             dbMap.put(Constants.READ, false);
             dbMap.put(Constants.READ_AT, null);
 
-            JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isNotEmpty(requestNode) && requestNode.isObject()) {
                 Iterator<Map.Entry<String, JsonNode>> fields = requestNode.fields();
                 while (fields.hasNext()) {
@@ -133,6 +161,14 @@ public class NotificationServiceImpl implements NotificationService {
                 return outgoingResponse;
             }
 
+
+            String notificationType = requestNode.path(TYPE).asText(null);
+            if (StringUtils.isBlank(notificationType)) {
+                log.warn("Missing 'notification_type' in payload");
+                updateErrorDetails(outgoingResponse, "'notification_type' is required", HttpStatus.BAD_REQUEST);
+                return outgoingResponse;
+            }
+
             if (userIdsNode.size() > MAX_USER_LIMIT) {
                 log.warn("Too many user_ids in request: {}", userIdsNode.size());
                 updateErrorDetails(outgoingResponse, "Cannot send notifications to more than 100 users in a single request", HttpStatus.BAD_REQUEST);
@@ -151,6 +187,14 @@ public class NotificationServiceImpl implements NotificationService {
 
                 if (StringUtils.isEmpty(userId)) {
                     log.warn("Empty user_id encountered in request");
+                    continue;
+                }
+
+                Optional<NotificationSettingEntity> settingOpt =
+                        notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(userId, notificationType);
+
+                if (settingOpt.isPresent() && !settingOpt.get().isEnabled()) {
+                    log.info("NotificationType '{}' is disabled for user '{}', skipping notification", notificationType, userId);
                     continue;
                 }
 
