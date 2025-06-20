@@ -450,6 +450,17 @@ public class Constants {
     public static final String USERID = "userId";
 
 
+    public static  final  String USER_NOTIFICATION_SETTING_UPSERT ="user.notification.setting.upsert";
+    public static  final  String USER_NOTIFICATION_SETTING_READ ="user.notification.setting.read";
+    public static  final  String USER_NOTIFICATION_SETTING_DELETE ="user.notification.setting.delete";
+
+
+    public static final String NOTIFICATION_TYPE = "notificationType";
+    public static final String ENABLED = "enabled";
+    public static final String SETTINGS = "settings";
+    public static final String DELETED = "deleted";
+
+
     private Constants() {
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
+import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
@@ -17,7 +18,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.lang.reflect.Method;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 import static com.igot.cb.util.Constants.*;
@@ -38,6 +38,9 @@ class NotificationServiceImplTest {
 
     @Mock
     private CassandraOperation cassandraOperation;
+
+    @Mock
+    private NotificationSettingRepository notificationSettingRepository;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -75,6 +78,8 @@ class NotificationServiceImplTest {
         JsonNode userNotificationDetail = mapper.readTree(payload);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(userId, notificationType))
+                .thenReturn(Optional.empty());
         when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
                 .thenReturn(Map.of("response", "SUCCESS"));
 
