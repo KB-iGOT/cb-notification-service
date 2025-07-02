@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
+import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
@@ -19,6 +20,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.igot.cb.util.Constants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -46,6 +48,7 @@ class NotificationServiceImplTest {
     private ObjectMapper objectMapper;
     private static final String CREATED_AT = "created_at";
     private static final String READ = "read";
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -213,6 +216,7 @@ class NotificationServiceImplTest {
         Map<String, Object> result = notificationService.prepareNotificationResponse(dbRecord);
         assertNull(result.get("message"));
     }
+
     @Test
     void testBulkCreateNotifications_exception() throws Exception {
         String payload = "{ \"request\": { " +
@@ -235,39 +239,51 @@ class NotificationServiceImplTest {
 
     @Test
     void testBulkCreateNotifications_success() throws Exception {
-        // Sample input where user_ids is an array of objects: [{ "user_id": "user1" }, { "user_id": "user2" }]
         String payload = "{ \"request\": { " +
                 "\"type\": \"comment\"," +
                 "\"category\": \"content\"," +
+                "\"sub_category\": \"CONTENT_PUBLISHED\"," +
+                "\"message\": {\"title\": \"Test\", \"data\": {\"foo\": \"bar\"}}," +
                 "\"user_ids\": [ {\"user_id\": \"user1\"}, {\"user_id\": \"user2\"} ]" +
                 "} }";
         ObjectMapper realMapper = new ObjectMapper();
         JsonNode userNotificationDetail = realMapper.readTree(payload);
 
-        // Mock insertBulkRecord to return a successful ApiResponse
-        when(cassandraOperation.insertBulkRecord(
-                anyString(), anyString(), anyList()))
-                .thenReturn(new ApiResponse(Map.of(Constants.RESPONSE, Constants.SUCCESS).toString()));
+        NotificationSettingEntity entity = new NotificationSettingEntity();
+        entity.setEnabled(true); // or entity.setIsEnabled(true); based on your class
+        when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(anyString(), anyString()))
+                .thenReturn(Optional.of(entity));
+
+        ApiResponse mockInsertResponse = new ApiResponse();
+        mockInsertResponse.setResponseCode(HttpStatus.OK);
+        mockInsertResponse.setResult(Map.of(Constants.RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.insertBulkRecord(anyString(), anyString(), anyList()))
+                .thenReturn(mockInsertResponse);
 
         // Spy to pass through prepareNotificationResponse
         NotificationServiceImpl spyService = Mockito.spy(notificationService);
-        doAnswer(invocation -> invocation.getArgument(0)).when(spyService).prepareNotificationResponse(any());
+        doAnswer(invocation -> invocation.getArgument(0))  // Simply return the input
+                .when(spyService).prepareNotificationResponse(any());
 
         ApiResponse response = spyService.bulkCreateNotifications(userNotificationDetail);
 
         assertEquals(HttpStatus.OK, response.getResponseCode());
         assertNotNull(response.getResult());
+
         Map<String, Object> result = (Map<String, Object>) response.getResult();
         assertTrue(result.containsKey("notifications"));
+
         List<Map<String, Object>> notifications = (List<Map<String, Object>>) result.get("notifications");
         assertEquals(2, notifications.size());
-        Set<String> userIds = new HashSet<>();
-        for (Map<String, Object> notif : notifications) {
-            userIds.add((String) notif.get(Constants.USER_ID));
-        }
+
+        Set<String> userIds = notifications.stream()
+                .map(n -> (String) n.get(Constants.USER_ID))
+                .collect(Collectors.toSet());
+
         assertTrue(userIds.contains("user1"));
         assertTrue(userIds.contains("user2"));
     }
+
 
     @Test
     void testBulkCreateNotifications_missingRequest() throws Exception {
@@ -496,8 +512,6 @@ class NotificationServiceImplTest {
         assertEquals("Internal server error while fetching markNotificationsAsDeleted  delete",
                 response.getParams().getErrMsg());
     }
-
-
 
 
     @Test
@@ -812,8 +826,6 @@ class NotificationServiceImplTest {
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
     }
-
-
 
 
 }

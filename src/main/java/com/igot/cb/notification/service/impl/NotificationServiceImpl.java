@@ -2,8 +2,10 @@ package com.igot.cb.notification.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
+import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
@@ -13,6 +15,7 @@ import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
 import io.micrometer.common.util.StringUtils;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
@@ -22,7 +25,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -175,6 +177,8 @@ public class NotificationServiceImpl implements NotificationService {
                 return outgoingResponse;
             }
 
+            NotificationSubCategory subCategory = NotificationSubCategory.valueOf(requestNode.get(SUB_CATEGORY).asText());
+
             List<Map<String, Object>> notificationRecords = new ArrayList<>();
             ZoneId zoneId = ZoneId.of(UTC);
             Instant instant = LocalDateTime.now().atZone(zoneId).toInstant();
@@ -182,7 +186,7 @@ public class NotificationServiceImpl implements NotificationService {
             List<String> userIdsForCountUpdate = new ArrayList<>();
 
             for (JsonNode userIdNode : userIdsNode) {
-                JsonNode idNode = userIdNode.get("user_id");
+                JsonNode idNode = userIdNode.get(USER_ID);
                 String userId = (idNode != null) ? idNode.asText() : null;
 
                 if (StringUtils.isEmpty(userId)) {
@@ -209,6 +213,17 @@ public class NotificationServiceImpl implements NotificationService {
                 dbMap.put(Constants.READ, false);
                 dbMap.put(Constants.READ_AT, null);
 
+                JsonNode messageNode = requestNode.get(MESSAGE);
+                if (messageNode != null) {
+                    JsonNode dataNode = messageNode.get(DATA);
+                    if (dataNode != null && dataNode.isObject()) {
+                        ((ObjectNode) dataNode).put(COUNT, 1);
+                    } else {
+                        ObjectNode newDataNode = ((ObjectNode) messageNode).putObject(DATA);
+                        newDataNode.put(COUNT, 1);
+                    }
+                }
+
                 Iterator<Map.Entry<String, JsonNode>> fields = requestNode.fields();
                 while (fields.hasNext()) {
                     Map.Entry<String, JsonNode> entry = fields.next();
@@ -219,15 +234,25 @@ public class NotificationServiceImpl implements NotificationService {
                         dbMap.put(key, valueNode.isValueNode() ? valueNode.asText() : valueNode.toString());
                     }
                 }
-
                 notificationRecords.add(dbMap);
+                if (subCategory.isShouldClub()) {
+                    clubNotification(subCategory, userId, requestNode);
+                }
+            }
+
+            String tableName = null;
+            if (subCategory.isShouldClub()) {
+                tableName = TABLE_INDIVIDUAL_NOTIFICATION;
+            } else {
+                tableName = TABLE_USER_NOTIFICATION;
             }
 
             Object insertResponse = cassandraOperation.insertBulkRecord(
                     Constants.KEYSPACE_SUNBIRD,
-                    Constants.TABLE_USER_NOTIFICATION,
+                    tableName,
                     notificationRecords
             );
+
 
             if (insertResponse instanceof ApiResponse apiResponse &&
                     Constants.FAILED.equals(apiResponse.get(Constants.RESPONSE))) {
@@ -235,7 +260,6 @@ public class NotificationServiceImpl implements NotificationService {
                 updateErrorDetails(outgoingResponse, "Failed to insert notifications", HttpStatus.INTERNAL_SERVER_ERROR);
                 return outgoingResponse;
             }
-
 
             for (String userId : userIdsForCountUpdate) {
                 incrementUnreadCountManually(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, userId);
@@ -257,6 +281,88 @@ public class NotificationServiceImpl implements NotificationService {
         return outgoingResponse;
     }
 
+    @SneakyThrows
+    private void clubNotification(NotificationSubCategory notificationSubCategory, String userId, JsonNode requestNode) {
+        Duration clubWindow = notificationSubCategory.clubWindow();
+        List<Map<String, Object>> dbRecords = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                KEYSPACE_SUNBIRD,
+                TABLE_USER_NOTIFICATION,
+                Map.of(USER_ID, userId),
+                null,
+                MAX_NOTIFICATIONS_FETCH_FOR_READ
+        );
+        for (Map<String, Object> dbRecord : dbRecords) {
+            String dbNotificationUserId = String.valueOf(dbRecord.get(USER_ID));
+            JsonNode dbNotificationMessage = objectMapper.readTree(String.valueOf(dbRecord.get(MESSAGE)));
+            JsonNode dbNotificationData = objectMapper.readTree(String.valueOf(dbRecord.get(MESSAGE))).get(DATA);
+
+            if (!NotificationSubCategory.valueOf(String.valueOf(dbRecord.get(SUB_CATEGORY))).equals(notificationSubCategory)) {
+                continue;
+            }
+
+            String dbNotificationClubKey = NotificationSubCategory.valueOf(String.valueOf(dbRecord.get(SUB_CATEGORY))).clubKey(dbNotificationData);
+            String clubKey = notificationSubCategory.clubKey(requestNode.get(MESSAGE).get(DATA));
+
+            if (((Instant) dbRecord.get(CREATED_AT)).isAfter(Instant.now().minus(clubWindow))
+                    && dbNotificationUserId.equals(userId)
+                    && dbNotificationClubKey.equals(clubKey)) {
+                dbNotificationMessage = updateNotificationMessage(notificationSubCategory, dbNotificationMessage);
+                cassandraOperation.updateRecordByCompositeKey(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION,
+                        Map.of(MESSAGE, objectMapper.writeValueAsString(dbNotificationMessage)),
+                        Map.of(
+                                USER_ID, userId,
+                                CREATED_AT, dbRecord.get(CREATED_AT)
+                        ));
+                dbRecord.put(MESSAGE, dbNotificationMessage);
+                return;
+            }
+        }
+
+        ZoneId zoneId = ZoneId.of(UTC);
+        Instant instant = LocalDateTime.now().atZone(zoneId).toInstant();
+        Map<String, Object> dbMap = new HashMap<>();
+        dbMap.put(Constants.NOTIFICATION_ID, java.util.UUID.randomUUID().toString());
+        dbMap.put(Constants.USER_ID, userId);
+        dbMap.put(Constants.CREATED_AT, instant);
+        dbMap.put(Constants.UPDATED_AT, instant);
+        dbMap.put(Constants.IS_DELETED, false);
+        dbMap.put(Constants.READ, false);
+        dbMap.put(Constants.READ_AT, null);
+
+        Iterator<Map.Entry<String, JsonNode>> fields = requestNode.fields();
+        while (fields.hasNext()) {
+            Map.Entry<String, JsonNode> entry = fields.next();
+            String key = entry.getKey();
+            JsonNode valueNode = entry.getValue();
+
+            if (!USER_IDS.equals(key)) {
+                dbMap.put(key, valueNode.isValueNode() ? valueNode.asText() : valueNode.toString());
+            }
+        }
+        cassandraOperation.insertRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION, dbMap);
+    }
+
+    private JsonNode updateNotificationMessage(NotificationSubCategory notificationSubCategory, JsonNode dbNotificationMessage) {
+        ObjectNode rootNode = (ObjectNode) dbNotificationMessage;
+        ObjectNode data = (ObjectNode) rootNode.get(DATA);
+        int existingCount = data.get(COUNT).asInt();
+
+        data.put(COUNT, existingCount + 1);
+
+        rootNode.set(DATA, data);
+
+        rootNode.put(BODY, constructMessage(notificationSubCategory, Map.of(COUNT, String.valueOf(existingCount + 1))));
+
+        return rootNode;
+    }
+
+    private String constructMessage(NotificationSubCategory notificationSubCategory, Map<String, String> placeholders) {
+        String customizedBody = notificationSubCategory.messageTemplate();
+        for (Map.Entry<String, String> entry : placeholders.entrySet()) {
+            customizedBody = customizedBody.replace("{" + entry.getKey() + "}", Optional.ofNullable(entry.getValue()).orElse(""));
+        }
+        return customizedBody;
+    }
 
 
     @Override
@@ -401,10 +507,13 @@ public class NotificationServiceImpl implements NotificationService {
 
     private int getFixedOrderIndex(String subType) {
         try {
-            return NotificationSubType.valueOf(subType.toUpperCase()).ordinal();
+            if (subType != null) {
+                return NotificationSubType.valueOf(subType.toUpperCase()).ordinal();
+            }
         } catch (IllegalArgumentException e) {
             return Integer.MAX_VALUE;
         }
+        return 0;
     }
 
 
@@ -810,7 +919,6 @@ public class NotificationServiceImpl implements NotificationService {
             log.error("Error updating unread count for user {}: {}", userId, e.getMessage(), e);
         }
     }
-
 
 
 }
