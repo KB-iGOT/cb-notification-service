@@ -400,8 +400,8 @@ public class Constants {
     public static final String SOURCE = "source";
     public static final String CATEGORY = "category";
     public static final String NOTIFICATIONS = "notifications";
-    public static final String  SUB_CATEGORY =  "sub_category";
-    public static final String  SUB_TYPE = "sub_type";
+    public static final String SUB_CATEGORY = "sub_category";
+    public static final String SUB_TYPE = "sub_type";
 
     public static final String TOTAL_COUNT = "totalCount";
     public static final String PAGE = "page";
@@ -420,7 +420,8 @@ public class Constants {
     public static final String USER_NOTIFICATION_CREATE = "notification.v1.create";
     public static final String USER_NOTIFICATION_BULK_CREATE = "notification.v1.bulk.create";
     public static final String TABLE_USER_NOTIFICATION = "notifications";
-    public static final String TABLE_UNREAD_NOTIFICATION_COUNT   ="unread_notification_counts";
+    public static final String TABLE_INDIVIDUAL_NOTIFICATION = "individual_notifications";
+    public static final String TABLE_UNREAD_NOTIFICATION_COUNT = "unread_notification_counts";
     public static final String USER_NOTIFICATION_READ_NOTIFICATIONID = "notification.v1.readby.useridnotificationid";
     public static final String USER_NOTIFICATION_READ_N_DAYSID = "notification.v1.readby.ndays";
     public static final String USER_NOTIFICATION_READ_UPDATEID = "notification.v1.update.notificationid";
@@ -433,7 +434,7 @@ public class Constants {
     public static final String TOTAL_READ = "totalRead";
     public static final String TOTAL_UNREAD = "totalUnread";
     public static final String CATEGORY_STATS = "categoryStats";
-    public static final String SUBTYPE_STATS ="subtypeStats";
+    public static final String SUBTYPE_STATS = "subtypeStats";
     public static final String INDIVIDUAL = "individual";
     public static final int MAX_USER_LIMIT = 100;
     public static final String USER_IDS = "user_ids";
@@ -450,9 +451,9 @@ public class Constants {
     public static final String USERID = "userId";
 
 
-    public static  final  String USER_NOTIFICATION_SETTING_UPSERT ="user.notification.setting.upsert";
-    public static  final  String USER_NOTIFICATION_SETTING_READ ="user.notification.setting.read";
-    public static  final  String USER_NOTIFICATION_SETTING_DELETE ="user.notification.setting.delete";
+    public static final String USER_NOTIFICATION_SETTING_UPSERT = "user.notification.setting.upsert";
+    public static final String USER_NOTIFICATION_SETTING_READ = "user.notification.setting.read";
+    public static final String USER_NOTIFICATION_SETTING_DELETE = "user.notification.setting.delete";
 
 
     public static final String NOTIFICATION_TYPE = "notificationType";
