@@ -9,6 +9,7 @@ import java.time.Duration;
 public enum NotificationSubCategory {
     CONTENT_REVIEW_REQUEST(false),
     CONTENT_PUBLISHED(false),
+    CONTENT_SPV_PUBLISHED(false),
     CONTENT_REJECTED(false),
     CONTENT_EDITED(false),
     LIKED_POST(true) {
