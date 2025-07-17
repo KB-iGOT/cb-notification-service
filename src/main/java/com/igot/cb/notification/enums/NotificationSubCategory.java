@@ -61,7 +61,22 @@ public enum NotificationSubCategory {
         }
     },
     POST_COMMENT(false),
-    REPLIED_COMMENT(false),
+    REPLIED_COMMENT(true){
+        @Override
+        public String messageTemplate(){
+            return "You have {count} replies on your comment.";
+        }
+        @Override
+        public Duration clubWindow() {
+            return Duration.ofMinutes(15);
+        }
+
+        @Override
+        public String clubKey(JsonNode data) {
+            return data.get("discussionId").asText();
+        }
+
+    },
     SEND_CONNECTION_REQUEST(true) {
         @Override
         public String messageTemplate() {
