@@ -98,7 +98,13 @@ public enum NotificationSubCategory {
     USER_TRANSFER(false),
     CONTENT_SHARE(false),
     TAGGED_COMMENT(false),
-    TAGGED_POST(false);
+    TAGGED_POST(false),
+    EVENT_PUBLISHED(false),
+    EVENT_ENROLLED(false),
+    COURSE_PUBLISHED(false),
+    PROGRAM_PUBLISHED(false),
+    LEARN_DISCUSSION_POST_COMMENT(false),
+    LEARN_DISCUSSION_POST_REPLY(false);
 
     private boolean shouldClub;
 
