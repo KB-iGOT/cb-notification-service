@@ -104,8 +104,9 @@ public enum NotificationSubCategory {
     COURSE_PUBLISHED(false),
     PROGRAM_PUBLISHED(false),
     LEARN_DISCUSSION_POST_COMMENT(false),
-    LEARN_DISCUSSION_POST_REPLY(false);
-
+    LEARN_DISCUSSION_POST_REPLY(false),
+    TRANSFER_UPDATE(false),
+    PROFILE_UPDATE(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
