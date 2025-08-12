@@ -10,8 +10,6 @@ import java.util.Optional;
 @Repository
 public interface NotificationSettingRepository extends JpaRepository<NotificationSettingEntity, String> {
 
-    List<NotificationSettingEntity> findByUserId(String userId);
-
     List<NotificationSettingEntity> findByUserIdAndIsDeletedFalse(String userId);
 
     Optional<NotificationSettingEntity> findByUserIdAndNotificationTypeAndIsDeletedFalse(String userId, String notificationType);
