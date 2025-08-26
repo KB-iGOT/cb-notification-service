@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
+import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
@@ -332,7 +333,6 @@ class NotificationServiceImplTest {
         assertEquals(Constants.FAILED, response.getParams().getStatus());
     }
 
-
     @Test
     void testGetNotificationsByUserIdAndLastXDays_filterUnread() {
         String authToken = "Bearer xyz";
@@ -355,9 +355,15 @@ class NotificationServiceImplTest {
         notif2.put(Constants.CATEGORY, "catA");
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+
+        // Correctly mock user and global notification calls separately
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
-                anyString(), anyString(), anyMap(), any(), anyInt()))
+                anyString(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif1, notif2));
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of()); // empty global notifications
 
         NotificationServiceImpl spyService = Mockito.spy(notificationService);
         doAnswer(invocation -> invocation.getArgument(0)).when(spyService).prepareNotificationResponse(any());
@@ -370,6 +376,96 @@ class NotificationServiceImplTest {
         List<Map<String, Object>> returnedNotifs = (List<Map<String, Object>>) result.get(NOTIFICATIONS);
         assertEquals(1, returnedNotifs.size());
         assertEquals("n1", returnedNotifs.get(0).get(NOTIFICATION_ID));
+    }
+    private boolean isGlobalSubCategory(NotificationSubCategory subCategory) {
+        return NotificationSubCategory.EVENT_PUBLISHED.equals(subCategory) ||
+                NotificationSubCategory.COURSE_PUBLISHED.equals(subCategory) ||
+                NotificationSubCategory.PROGRAM_PUBLISHED.equals(subCategory);
+    }
+
+    @Test
+    public void testIsGlobalSubCategory() {
+        assertTrue(isGlobalSubCategory(NotificationSubCategory.EVENT_PUBLISHED));
+        assertTrue(isGlobalSubCategory(NotificationSubCategory.COURSE_PUBLISHED));
+        assertTrue(isGlobalSubCategory(NotificationSubCategory.PROGRAM_PUBLISHED));
+        assertFalse(isGlobalSubCategory(null));
+    }
+
+    @Test
+    void testGetInstant_withInstant() {
+        Instant now = Instant.now();
+        Instant result = notificationService.getInstant(now);
+        assertEquals(now, result);
+    }
+
+    @Test
+    void testGetInstant_withDate() {
+        Date date = new Date();
+        Instant expected = date.toInstant();
+        Instant result = notificationService.getInstant(date);
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testGetInstant_withValidString() {
+        String validIsoString = "2023-08-07T10:15:30Z";
+        Instant expected = Instant.parse(validIsoString);
+        Instant result = notificationService.getInstant(validIsoString);
+        assertEquals(expected, result);
+    }
+
+    @Test
+    void testGetInstant_withInvalidString() {
+        String invalidString = "not-a-date";
+        Instant result = notificationService.getInstant(invalidString);
+        assertNull(result);
+    }
+
+    @Test
+    void testGetInstant_withUnsupportedType() {
+        Integer unsupportedValue = 12345;
+        Instant result = notificationService.getInstant(unsupportedValue);
+        assertNull(result);
+    }
+
+    @Test
+    void testCreateGlobalNotification_Success() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.EVENT_PUBLISHED;
+
+        String jsonPayload = "{ " +
+                "\"type\": \"info\", " +
+                "\"category\": \"event\", " +
+                "\"sub_category\": \"EVENT_PUBLISHED\", " +
+                "\"sub_type\": \"announcement\", " +
+                "\"source\": \"system\", " +
+                "\"role\": \"admin\", " +
+                "\"template_id\": \"template123\", " +
+                "\"message\": { \"title\": \"Event started\", \"body\": \"The event is live now!\" } " +
+                "}";
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode requestNode = mapper.readTree(jsonPayload);
+
+        when(cassandraOperation.insertRecord(
+                anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap()))
+                .thenReturn(Map.of("response", Constants.SUCCESS));
+
+        NotificationServiceImpl spyService = Mockito.spy(notificationService);
+        doAnswer(invocation -> invocation.getArgument(0))
+                .when(spyService).prepareNotificationResponse(any());
+
+        ApiResponse response = spyService.createGlobalNotification(subCategory, requestNode);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertNotNull(response.getResult());
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertTrue(result.containsKey("notification"));
+
+        Map<String, Object> notification = (Map<String, Object>) result.get("notification");
+
+        assertEquals(Constants.GLOBAL, notification.get(Constants.USER_ID));
+
     }
 
     @Test

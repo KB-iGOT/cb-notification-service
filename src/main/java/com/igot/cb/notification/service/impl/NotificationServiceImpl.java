@@ -10,6 +10,7 @@ import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
+import com.igot.cb.userNotificationSetting.enums.NotificationType;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
@@ -34,6 +35,7 @@ import static com.igot.cb.util.Constants.*;
 @Service
 @Slf4j
 public class NotificationServiceImpl implements NotificationService {
+
 
 
     @Autowired
@@ -179,6 +181,12 @@ public class NotificationServiceImpl implements NotificationService {
 
             NotificationSubCategory subCategory = NotificationSubCategory.valueOf(requestNode.get(SUB_CATEGORY).asText());
 
+
+            if (isGlobalSubCategory(subCategory)) {
+                return createGlobalNotification(subCategory, requestNode);
+            }
+
+
             List<Map<String, Object>> notificationRecords = new ArrayList<>();
             ZoneId zoneId = ZoneId.of(UTC);
             Instant instant = LocalDateTime.now().atZone(zoneId).toInstant();
@@ -279,6 +287,66 @@ public class NotificationServiceImpl implements NotificationService {
         }
 
         return outgoingResponse;
+    }
+
+    private boolean isGlobalSubCategory(NotificationSubCategory subCategory) {
+        return NotificationSubCategory.EVENT_PUBLISHED.equals(subCategory) ||
+                NotificationSubCategory.COURSE_PUBLISHED.equals(subCategory) ||
+                NotificationSubCategory.PROGRAM_PUBLISHED.equals(subCategory);
+    }
+
+    public ApiResponse createGlobalNotification(NotificationSubCategory subCategory, JsonNode requestNode) {
+        log.info("Detected global notification for subCategory '{}'", subCategory);
+        ApiResponse response = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_BULK_CREATE);
+
+        try {
+            Instant now = LocalDateTime.now().atZone(ZoneId.of(UTC)).toInstant();
+
+            Map<String, Object> globalNotification = new HashMap<>();
+            globalNotification.put(NOTIFICATION_ID, java.util.UUID.randomUUID().toString());
+            globalNotification.put(CREATED_AT, now);
+            globalNotification.put(UPDATED_AT, now);
+            globalNotification.put(USER_ID, GLOBAL);
+            globalNotification.put(READ, false);
+            globalNotification.put(READ_AT, null);
+            globalNotification.put(IS_DELETED, false);
+
+
+            for (String field : List.of("type", "category", "sub_category", "sub_type", "source", "role", "template_id")) {
+                JsonNode value = requestNode.get(field);
+                if (value != null) {
+                    globalNotification.put(field, value.isValueNode() ? value.asText() : value.toString());
+                }
+            }
+
+            JsonNode messageNode = requestNode.get(MESSAGE);
+            if (messageNode != null) {
+                globalNotification.put(MESSAGE, messageNode.toString());
+            }
+
+            Object insertResponse = cassandraOperation.insertRecord(
+                    Constants.KEYSPACE_SUNBIRD,
+                    TABLE_GLOBAL_NOTIFICATION,
+                    globalNotification
+            );
+
+            if (insertResponse instanceof ApiResponse apiResponse &&
+                    Constants.FAILED.equals(apiResponse.get(Constants.RESPONSE))) {
+                log.error("Global notification insertion failed: {}", apiResponse.getParams().getErrMsg());
+                updateErrorDetails(response, "Failed to insert global notification", HttpStatus.INTERNAL_SERVER_ERROR);
+                return response;
+            }
+
+            Map<String, Object> formattedResponse = prepareNotificationResponse(globalNotification);
+            response.setResponseCode(HttpStatus.OK);
+            response.setResult(Map.of("notification", formattedResponse));
+            log.info("Successfully inserted global notification for subCategory '{}'", subCategory);
+        } catch (Exception e) {
+            log.error("Error creating global notification: {}", e.getMessage(), e);
+            updateErrorDetails(response, "Internal server error while saving global notification", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        return response;
     }
 
     @SneakyThrows
@@ -404,8 +472,11 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public ApiResponse getNotificationsByUserIdAndLastXDays(String authToken, int days, int page, int size, NotificationReadStatus status, String subTypeFilter) {
-        log.info("NotificationService::readByUserIdAndLastXDaysNotifications: inside the method");
+    public ApiResponse getNotificationsByUserIdAndLastXDays(
+            String authToken, int days, int page, int size,
+            NotificationReadStatus status, String subTypeFilter) {
+
+        log.info("NotificationService::getNotificationsByUserIdAndLastXDays - start");
         ApiResponse response = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_N_DAYSID);
 
         try {
@@ -415,9 +486,29 @@ public class NotificationServiceImpl implements NotificationService {
                 return response;
             }
 
+            Optional<NotificationSettingEntity> settingOpt =
+                    notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(userId, String.valueOf(NotificationType.IN_APP));
+
+
+            if (settingOpt.isPresent() && !settingOpt.get().isEnabled()) {
+                log.info("Notifications are disabled for user '{}', returning empty list", userId);
+                Map<String, Object> emptyResult = Map.of(
+                        NOTIFICATIONS, List.of(),
+                        TOTAL_COUNT, 0,
+                        PAGE, page,
+                        SIZE, size,
+                        HAS_NEXT_PAGE, false,
+                        SUBTYPE_STATS, List.of()
+                );
+
+                response.setResponseCode(HttpStatus.OK);
+                response.setResult(emptyResult);
+                return response;
+            }
+
             Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
 
-            List<Map<String, Object>> allNotifications = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> userNotifications = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_USER_NOTIFICATION,
                     Map.of(USER_ID, userId),
@@ -425,24 +516,55 @@ public class NotificationServiceImpl implements NotificationService {
                     MAX_NOTIFICATIONS_FETCH_FOR_READ
             );
 
-            List<Map<String, Object>> statFiltered = allNotifications.stream()
-                    .filter(notification -> {
-                        Instant createdAt = (Instant) notification.get(CREATED_AT);
+            List<Map<String, Object>> globalNotifications = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                    Constants.KEYSPACE_SUNBIRD,
+                    Constants.TABLE_GLOBAL_NOTIFICATION,
+                    Map.of(USER_ID, GLOBAL),
+                    List.of(NOTIFICATION_ID, CREATED_AT, TYPE, MESSAGE, READ, ROLE, SOURCE, CATEGORY, SUB_CATEGORY, SUB_TYPE, IS_DELETED),
+                    MAX_NOTIFICATIONS_FETCH_FOR_READ
+            );
+
+            globalNotifications.forEach(n -> n.putIfAbsent(READ, false));
+
+            Set<String> userNotifIds = userNotifications.stream()
+                    .map(n -> (String) n.get(NOTIFICATION_ID))
+                    .collect(Collectors.toSet());
+
+            List<Map<String, Object>> merged = new ArrayList<>(userNotifications);
+
+            for (Map<String, Object> globalNotif : globalNotifications) {
+                String notifId = (String) globalNotif.get(NOTIFICATION_ID);
+                if (!userNotifIds.contains(notifId)) {
+                    merged.add(globalNotif);
+                }
+            }
+
+            List<Map<String, Object>> mergedFiltered = merged.stream()
+                    .filter(n -> {
+                        Instant createdAt = getInstant(n.get(CREATED_AT));
                         if (createdAt == null || createdAt.isBefore(fromDate)) return false;
 
-                        Boolean isRead = (Boolean) notification.get(READ);
+                        Boolean isDeleted = (Boolean) n.get(IS_DELETED);
+                        if (Boolean.TRUE.equals(isDeleted)) return false;
+
+                        Boolean isRead = (Boolean) n.get(READ);
                         if (status == NotificationReadStatus.READ && !Boolean.TRUE.equals(isRead)) return false;
                         if (status == NotificationReadStatus.UNREAD && !Boolean.FALSE.equals(isRead)) return false;
-
-                        Boolean isDeleted = (Boolean) notification.get(IS_DELETED);
-                        if (Boolean.TRUE.equals(isDeleted)) return false;
 
                         return true;
                     })
                     .toList();
 
+            List<Map<String, Object>> sortedMerged = new ArrayList<>(mergedFiltered);
+            sortedMerged.sort((a, b) -> {
+                Instant t1 = getInstant(a.get(CREATED_AT));
+                Instant t2 = getInstant(b.get(CREATED_AT));
+                return t2.compareTo(t1);
+            });
+
+
             Map<String, Map<String, Integer>> subTypeCountMap = new HashMap<>();
-            for (Map<String, Object> notification : statFiltered) {
+            for (Map<String, Object> notification : sortedMerged) {
                 String cat = (String) notification.getOrDefault(SUB_TYPE, ALL);
                 Boolean isRead = (Boolean) notification.get(READ);
 
@@ -456,7 +578,8 @@ public class NotificationServiceImpl implements NotificationService {
                     .sorted(Comparator.comparingInt(stat -> getFixedOrderIndex((String) stat.get(NAME))))
                     .toList();
 
-            List<Map<String, Object>> finalFiltered = statFiltered.stream()
+
+            List<Map<String, Object>> filteredBySubType = sortedMerged.stream()
                     .filter(notification -> {
                         if (StringUtils.isNotBlank(subTypeFilter)) {
                             String subType = (String) notification.getOrDefault(SUB_TYPE, ALL);
@@ -466,10 +589,12 @@ public class NotificationServiceImpl implements NotificationService {
                     })
                     .toList();
 
-            int total = finalFiltered.size();
+            int total = filteredBySubType.size();
             int fromIndex = Math.min(page * size, total);
             int toIndex = Math.min(fromIndex + size, total);
-            List<Map<String, Object>> paginated = finalFiltered.subList(fromIndex, toIndex);
+            if (fromIndex > toIndex) fromIndex = toIndex;
+
+            List<Map<String, Object>> paginated = filteredBySubType.subList(fromIndex, toIndex);
 
             List<Map<String, Object>> processed = paginated.stream()
                     .map(this::prepareNotificationResponse)
@@ -477,7 +602,7 @@ public class NotificationServiceImpl implements NotificationService {
 
             Map<String, Object> resultMap = new HashMap<>();
             resultMap.put(NOTIFICATIONS, processed);
-            resultMap.put(TOTAL_COUNT, statFiltered.size());
+            resultMap.put(TOTAL_COUNT, total);
             resultMap.put(PAGE, page);
             resultMap.put(SIZE, size);
             resultMap.put(HAS_NEXT_PAGE, toIndex < total);
@@ -485,17 +610,33 @@ public class NotificationServiceImpl implements NotificationService {
 
             response.setResponseCode(HttpStatus.OK);
             response.setResult(resultMap);
-            log.info("NotificationServiceImpl::readByUserIdAndLastXDaysNotifications: list retrieved successfully");
+            log.info("NotificationService::getNotificationsByUserIdAndLastXDays - success, total: {}", total);
 
         } catch (Exception e) {
-            log.error("Error while fetching readByUserIdAndLastXDaysNotifications from Cassandra: {}", e.getMessage(), e);
+            log.error("Error fetching notifications: {}", e.getMessage(), e);
             updateErrorDetails(response,
-                    "Internal server error while fetching readByUserIdAndLastXDaysNotifications list",
+                    "Internal server error while fetching notification list",
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         return response;
     }
+
+    public Instant getInstant(Object value) {
+        if (value instanceof Instant) {
+            return (Instant) value;
+        } else if (value instanceof Date) {
+            return ((Date) value).toInstant();
+        } else if (value instanceof String) {
+            try {
+                return Instant.parse((String) value);
+            } catch (Exception e) {
+                log.warn("Invalid created_at format: {}", value);
+            }
+        }
+        return null;
+    }
+
 
     private Map<String, Object> buildSubTypeStat(Map.Entry<String, Map<String, Integer>> entry) {
         Map<String, Object> stat = new HashMap<>();
@@ -535,9 +676,49 @@ public class NotificationServiceImpl implements NotificationService {
             return response;
         }
 
+        String action = (String) request.get(ACTION);
+
         try {
             List<Map<String, Object>> userNotifications = fetchNotifications(userId);
             List<String> notificationIds;
+
+
+            if (GLOBAL.equalsIgnoreCase(action)) {
+                if (ALL.equalsIgnoreCase(type)) {
+                    log.info("Global action with type 'all' - inserting and marking global notifications as read for user {}", userId);
+                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications();
+                    List<Map<String, Object>> insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
+                    response.getParams().setErrMsg("Global notifications marked as read and inserted");
+                    response.getParams().setStatus(Constants.SUCCESS);
+                    response.setResponseCode(HttpStatus.OK);
+                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    return response;
+                }else if (INDIVIDUAL.equalsIgnoreCase(type)) {
+                    log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
+                    notificationIds = extractIndividualNotificationIds(request, response);
+                    if (notificationIds == null) return response;
+                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications();
+                    List<Map<String, Object>> targetGlobals = globalNotifications.stream()
+                            .filter(n -> notificationIds.contains(n.get(NOTIFICATION_ID)))
+                            .collect(Collectors.toList());
+
+                    if (targetGlobals.isEmpty()) {
+                        updateErrorDetails(response, "No matching global notifications found for provided IDs", HttpStatus.NOT_FOUND);
+                        return response;
+                    }
+
+                    List<Map<String, Object>> insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, targetGlobals);
+                    response.getParams().setErrMsg("Selected global notifications marked as read and inserted");
+                    response.getParams().setStatus(Constants.SUCCESS);
+                    response.setResponseCode(HttpStatus.OK);
+                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    return response;
+
+                } else {
+                    updateErrorDetails(response, "Invalid type. Allowed values: all, individual", HttpStatus.BAD_REQUEST);
+                    return response;
+                }
+            }
 
             if (ALL.equalsIgnoreCase(type)) {
                 notificationIds = userNotifications.stream()
@@ -624,6 +805,66 @@ public class NotificationServiceImpl implements NotificationService {
 
         return updated;
     }
+
+    private List<Map<String, Object>> fetchGlobalNotifications() {
+        return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_GLOBAL_NOTIFICATION,
+                Map.of(Constants.USER_ID, Constants.GLOBAL),
+                null,
+                MAX_NOTIFICATIONS_FETCH_FOR_READ
+        );
+    }
+
+    private List<Map<String, Object>> insertAndMarkGlobalNotificationsAsRead(
+            String userId, List<Map<String, Object>> globalNotifs) {
+
+        List<Map<String, Object>> existingUserNotifs = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_USER_NOTIFICATION,
+                Map.of(USER_ID, userId),
+                List.of(NOTIFICATION_ID),
+                MAX_NOTIFICATIONS_FETCH_FOR_READ
+        );
+
+        Set<String> existingIds = existingUserNotifs.stream()
+                .map(n -> (String) n.get(NOTIFICATION_ID))
+                .collect(Collectors.toSet());
+
+        List<Map<String, Object>> inserted = new ArrayList<>();
+        Instant now = Instant.now();
+
+        for (Map<String, Object> global : globalNotifs) {
+            String notificationId = (String) global.get(NOTIFICATION_ID);
+
+            if (existingIds.contains(notificationId)) {
+                log.info("Notification {} already exists for user {}, skipping insert.", notificationId, userId);
+                continue;
+            }
+
+            Map<String, Object> newUserNotif = new HashMap<>(global);
+            newUserNotif.put(USER_ID, userId);
+            newUserNotif.put(READ, true);
+            newUserNotif.put(READ_AT, now);
+            newUserNotif.put(CREATED_AT, global.get(CREATED_AT));
+            newUserNotif.put(IS_DELETED, false);
+
+            cassandraOperation.insertRecord(
+                    Constants.KEYSPACE_SUNBIRD,
+                    Constants.TABLE_USER_NOTIFICATION,
+                    newUserNotif
+            );
+
+            inserted.add(Map.of(
+                    ID, notificationId,
+                    READ, true,
+                    READ_AT, now.toString()
+            ));
+        }
+
+        return inserted;
+    }
+
 
     @Override
     public ApiResponse markNotificationsAsDeleted(String authToken, List<String> notificationIds) {
@@ -919,6 +1160,4 @@ public class NotificationServiceImpl implements NotificationService {
             log.error("Error updating unread count for user {}: {}", userId, e.getMessage(), e);
         }
     }
-
-
 }

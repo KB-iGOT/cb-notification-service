@@ -421,6 +421,7 @@ public class Constants {
     public static final String USER_NOTIFICATION_BULK_CREATE = "notification.v1.bulk.create";
     public static final String TABLE_USER_NOTIFICATION = "notifications";
     public static final String TABLE_INDIVIDUAL_NOTIFICATION = "individual_notifications";
+    public static final String TABLE_GLOBAL_NOTIFICATION="global_notifications";
     public static final String TABLE_UNREAD_NOTIFICATION_COUNT = "unread_notification_counts";
     public static final String USER_NOTIFICATION_READ_NOTIFICATIONID = "notification.v1.readby.useridnotificationid";
     public static final String USER_NOTIFICATION_READ_N_DAYSID = "notification.v1.readby.ndays";
@@ -460,7 +461,8 @@ public class Constants {
     public static final String ENABLED = "enabled";
     public static final String SETTINGS = "settings";
     public static final String DELETED = "deleted";
-
+    public static final String GLOBAL = "global";
+    public static final String ACTION = "action";
 
     private Constants() {
     }
