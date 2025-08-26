@@ -9,6 +9,7 @@ import java.time.Duration;
 public enum NotificationSubCategory {
     CONTENT_REVIEW_REQUEST(false),
     CONTENT_PUBLISHED(false),
+    CONTENT_SPV_PUBLISHED(false),
     CONTENT_REJECTED(false),
     CONTENT_EDITED(false),
     LIKED_POST(true) {
@@ -46,7 +47,7 @@ public enum NotificationSubCategory {
     REPLIED_POST(true) {
         @Override
         public String messageTemplate() {
-            return "You have {count} replies on your comment.";
+            return "You have {count} liked your reply.";
         }
 
         @Override
@@ -60,39 +61,24 @@ public enum NotificationSubCategory {
         }
     },
     POST_COMMENT(false),
-    REPLIED_COMMENT(false),
-    SEND_CONNECTION_REQUEST(true) {
+    REPLIED_COMMENT(true){
         @Override
-        public String messageTemplate() {
-            return "You received {count} new connection requests.";
+        public String messageTemplate(){
+            return "You have {count} replies on your comment.";
         }
-
         @Override
         public Duration clubWindow() {
-            return Duration.ofMinutes(60);
+            return Duration.ofMinutes(15);
         }
 
         @Override
         public String clubKey(JsonNode data) {
-            return data.get("id").asText();
-        }
-    },
-    ACCEPTED_CONNECTION_REQUEST(true) {
-        @Override
-        public String messageTemplate() {
-            return "{count} users accepted your connection request.";
+            return data.get("discussionId").asText();
         }
 
-        @Override
-        public Duration clubWindow() {
-            return Duration.ofMinutes(60);
-        }
-
-        @Override
-        public String clubKey(JsonNode data) {
-            return data.get("id").asText();
-        }
     },
+    SEND_CONNECTION_REQUEST(false),
+    ACCEPTED_CONNECTION_REQUEST(false),
     REJECTED_CONNECTION_REQUEST(false),
     PROFILE_VERIFICATION(false),
     USER_TRANSFER(false),
