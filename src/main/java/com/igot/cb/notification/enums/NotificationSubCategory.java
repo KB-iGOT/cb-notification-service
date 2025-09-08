@@ -93,7 +93,8 @@ public enum NotificationSubCategory {
     LEARN_DISCUSSION_POST_REPLY(false),
     TRANSFER_UPDATE(false),
     PROFILE_UPDATE(false),
-    PROFANITY_CHECK(false);
+    PROFANITY_CHECK(false),
+    DELETED_BATCH(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
