@@ -587,6 +587,7 @@ public class NotificationServiceImpl implements NotificationService {
                         }
                         return true;
                     })
+                    .limit(MAX_NOTIFICATIONS_FETCH_FOR_READ)
                     .toList();
 
             int total = filteredBySubType.size();
