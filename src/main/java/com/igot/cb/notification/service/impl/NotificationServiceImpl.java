@@ -578,7 +578,6 @@ public class NotificationServiceImpl implements NotificationService {
             List<Map<String, Object>> subTypeStats = subTypeCountMap.entrySet().stream()
                     .map(this::buildSubTypeStat)
                     .sorted(Comparator.comparingInt(stat -> getFixedOrderIndex((String) stat.get(NAME))))
-                    .limit(MAX_NOTIFICATIONS_FETCH_FOR_READ)
                     .toList();
 
 
