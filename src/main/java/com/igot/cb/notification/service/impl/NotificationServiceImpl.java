@@ -555,12 +555,14 @@ public class NotificationServiceImpl implements NotificationService {
                     })
                     .toList();
 
-            List<Map<String, Object>> sortedMerged = new ArrayList<>(mergedFiltered);
-            sortedMerged.sort((a, b) -> {
-                Instant t1 = getInstant(a.get(CREATED_AT));
-                Instant t2 = getInstant(b.get(CREATED_AT));
-                return t2.compareTo(t1);
-            });
+            List<Map<String, Object>> sortedMerged = mergedFiltered.stream()
+                    .sorted((a, b) -> {
+                        Instant t1 = getInstant(a.get(CREATED_AT));
+                        Instant t2 = getInstant(b.get(CREATED_AT));
+                        return t2.compareTo(t1);
+                    })
+                    .limit(MAX_NOTIFICATIONS_FETCH_FOR_READ)
+                    .toList();
 
 
             Map<String, Map<String, Integer>> subTypeCountMap = new HashMap<>();
@@ -576,6 +578,7 @@ public class NotificationServiceImpl implements NotificationService {
             List<Map<String, Object>> subTypeStats = subTypeCountMap.entrySet().stream()
                     .map(this::buildSubTypeStat)
                     .sorted(Comparator.comparingInt(stat -> getFixedOrderIndex((String) stat.get(NAME))))
+                    .limit(MAX_NOTIFICATIONS_FETCH_FOR_READ)
                     .toList();
 
 
