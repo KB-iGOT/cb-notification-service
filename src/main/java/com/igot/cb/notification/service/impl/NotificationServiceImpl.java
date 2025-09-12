@@ -18,6 +18,7 @@ import com.igot.cb.util.ProjectUtil;
 import io.micrometer.common.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -689,7 +690,7 @@ public class NotificationServiceImpl implements NotificationService {
             if (GLOBAL.equalsIgnoreCase(action)) {
                 if (ALL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'all' - inserting and marking global notifications as read for user {}", userId);
-                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications();
+                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
                     List<Map<String, Object>> insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
                     response.getParams().setErrMsg("Global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
@@ -700,7 +701,7 @@ public class NotificationServiceImpl implements NotificationService {
                     log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
                     notificationIds = extractIndividualNotificationIds(request, response);
                     if (notificationIds == null) return response;
-                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications();
+                    List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
                     List<Map<String, Object>> targetGlobals = globalNotifications.stream()
                             .filter(n -> notificationIds.contains(n.get(NOTIFICATION_ID)))
                             .collect(Collectors.toList());
@@ -809,13 +810,13 @@ public class NotificationServiceImpl implements NotificationService {
         return updated;
     }
 
-    private List<Map<String, Object>> fetchGlobalNotifications() {
+    private List<Map<String, Object>> fetchGlobalNotifications(int limit) {
         return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 Constants.KEYSPACE_SUNBIRD,
                 Constants.TABLE_GLOBAL_NOTIFICATION,
                 Map.of(Constants.USER_ID, Constants.GLOBAL),
                 null,
-                MAX_NOTIFICATIONS_FETCH_FOR_READ
+                limit
         );
     }
 
@@ -951,7 +952,7 @@ public class NotificationServiceImpl implements NotificationService {
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_UNREAD_NOTIFICATION_COUNT,
                     criteria,
-                    List.of(COUNT),
+                    List.of(COUNT, UPDATED_AT),
                     1
             );
 
@@ -961,14 +962,27 @@ public class NotificationServiceImpl implements NotificationService {
                     Object countObj = record.get(COUNT);
                     if (countObj instanceof Number) {
                         unreadCount = ((Number) countObj).intValue();
+                        Instant lastUpdated = record.get(UPDATED_AT) instanceof Instant ? (Instant) record.get(UPDATED_AT) : null;
+                        if (lastUpdated != null ) {
+                            int globalNotificationCount = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_COUNT).stream()
+                                    .filter(n -> n.get(CREATED_AT) instanceof Instant && ((Instant)n.get(CREATED_AT)).isAfter(lastUpdated))
+                                    .toList().size();
+                            unreadCount += globalNotificationCount;
+                        }
                     }
                 }
             } else {
                 Map<String, Object> insertMap = new HashMap<>();
                 insertMap.put(Constants.USER_ID, userId);
                 insertMap.put(COUNT, 0);
+                insertMap.put(UPDATED_AT, Instant.now());
                 cassandraOperation.insertRecord(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, insertMap);
+                List<Map<String,Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_COUNT);
+                int globalCount = CollectionUtils.isNotEmpty(globalNotifications) ? globalNotifications.size() : 0;
+                unreadCount = globalCount;
             }
+
+
 
             log.info("Fetched unread count for userId {}: {}", userId, unreadCount);
             outgoingResponse.setResponseCode(HttpStatus.OK);
@@ -1000,7 +1014,9 @@ public class NotificationServiceImpl implements NotificationService {
                 return response;
             }
 
-            Map<String, Object> updateAttributes = Map.of(COUNT, 0);
+            Map<String, Object> updateAttributes = new HashMap<>();
+            updateAttributes.put(COUNT, 0);
+            updateAttributes.put(UPDATED_AT, Instant.now());
             Map<String, Object> compositeKey = Map.of(Constants.USER_ID, userId);
 
             Map<String, Object> updateResponse = cassandraOperation.updateRecordByCompositeKey(
@@ -1150,6 +1166,7 @@ public class NotificationServiceImpl implements NotificationService {
 
             Map<String, Object> updateAttributes = new HashMap<>();
             updateAttributes.put(COUNT, updatedCount);
+            updateAttributes.put(UPDATED_AT, Instant.now());
 
             cassandraOperation.updateRecordByCompositeKey(
                     keyspace,
