@@ -9,9 +9,7 @@ import com.igot.cb.util.PropertiesCache;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -59,9 +57,11 @@ class CassandraConnectionManagerImplTest {
     }
 
     @org.junit.jupiter.api.Test
-    void testShutdownHook() {
+    void testShutdownHook() throws  InterruptedException {
         Thread thread = new CassandraConnectionManagerImpl.ResourceCleanUp();
         thread.start();
+        thread.join(1000);
+        assertFalse(thread.isAlive() , " Shutdown hook thread should have completed execution");
     }
 
     private ConsistencyLevel invokeGetConsistencyLevel() {
