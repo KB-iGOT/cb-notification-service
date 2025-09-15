@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.*;
 
 import java.nio.file.Files;
@@ -103,7 +104,7 @@ public class KeyManagerTest {
             PropertiesCache mockPropertiesCache = mock(PropertiesCache.class);
             propertiesCacheMock.when(PropertiesCache::getInstance).thenReturn(mockPropertiesCache);
             KeyManager keyManager = new KeyManager();
-            keyManager.init();
+            assertDoesNotThrow(keyManager::init, "KeyManager.init() should not throw any exception");
         }
     }
 
