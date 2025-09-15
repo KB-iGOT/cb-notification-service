@@ -59,4 +59,41 @@ class PayloadValidationTest {
 
         assertDoesNotThrow(() -> payloadValidation.validatePayload(schemaFilePath, payload));
     }
+
+
+    @Test
+    void testValidatePayload_InvalidJsonArray_ThrowsCustomException() throws Exception {
+        // JSON array payload with one invalid object (missing required "exampleField")
+        String jsonArray = "[{\"exampleField\":\"value1\"}, {\"wrongField\":\"oops\"}]";
+        JsonNode payload = objectMapper.readTree(jsonArray);
+
+        String schemaFilePath = "/schema/comment-tree-valid-request.json";
+
+        CustomException exception = assertThrows(CustomException.class,
+                () -> payloadValidation.validatePayload(schemaFilePath, payload));
+
+        assertEquals("Failed to validate payload", exception.getCode());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatusCode());
+    }
+
+    @Test
+    void testValidatePayload_NullSchemaFile_ThrowsCustomException() {
+        JsonNode payload = objectMapper.createObjectNode().put("exampleField", "value");
+
+        CustomException exception = assertThrows(CustomException.class,
+                () -> payloadValidation.validatePayload("/schema/nonexistent.json", payload));
+
+        assertEquals("Failed to validate payload", exception.getCode());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatusCode());
+    }
+
+    @Test
+    void testValidatePayload_NullPayload_ThrowsCustomException() {
+        CustomException exception = assertThrows(CustomException.class,
+                () -> payloadValidation.validatePayload("/schema/comment-tree-valid-request.json", null));
+
+        assertEquals("Failed to validate payload", exception.getCode());
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getHttpStatusCode());
+    }
+
 }
