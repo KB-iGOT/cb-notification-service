@@ -972,11 +972,6 @@ public class NotificationServiceImpl implements NotificationService {
                     }
                 }
             } else {
-                Map<String, Object> insertMap = new HashMap<>();
-                insertMap.put(Constants.USER_ID, userId);
-                insertMap.put(COUNT, 0);
-                insertMap.put(UPDATED_AT, Instant.now());
-                cassandraOperation.insertRecord(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, insertMap);
                 List<Map<String,Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_COUNT);
                 int globalCount = CollectionUtils.isNotEmpty(globalNotifications) ? globalNotifications.size() : 0;
                 unreadCount = globalCount;
