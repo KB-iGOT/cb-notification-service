@@ -2,6 +2,7 @@ package com.igot.cb.notification.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
@@ -19,9 +20,11 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static com.igot.cb.util.Constants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -923,5 +926,853 @@ class NotificationServiceImplTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
     }
 
+    @Test
+    void testClubNotification_InsertsNewNotification_WhenNoExistingClubFound() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user123";
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
+                .thenReturn(Map.of("response", "SUCCESS"));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        verify(cassandraOperation, times(1))
+                .insertRecord(eq(Constants.KEYSPACE_SUNBIRD), eq(Constants.TABLE_USER_NOTIFICATION), anyMap());
+    }
+
+    @Test
+    void testClubNotification_UpdatesExistingNotification_WhenWithinClubWindowAndSameClubKey() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user123";
+        Instant createdAt = Instant.now();
+
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+        JsonNode existingMessage = realMapper.readTree("{\"data\":{\"discussionId\":\"d1\",\"count\":1}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, userId);
+        dbRecord.put(Constants.SUB_CATEGORY, subCategory.name());
+        dbRecord.put(Constants.CREATED_AT, createdAt);
+        dbRecord.put(Constants.MESSAGE, existingMessage.toString());
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+        when(objectMapper.readTree(anyString())).thenReturn(existingMessage);
+        when(objectMapper.writeValueAsString(any(JsonNode.class))).thenReturn(existingMessage.toString());
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        verify(cassandraOperation, times(1))
+                .updateRecordByCompositeKey(eq(Constants.KEYSPACE_SUNBIRD),
+                        eq(Constants.TABLE_USER_NOTIFICATION),
+                        anyMap(), anyMap());
+    }
+
+    @Test
+    void testClubNotification_SkipsUpdate_WhenDifferentSubCategory() throws Exception {
+        String userId = "user123";
+        Instant createdAt = Instant.now();
+
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+        JsonNode existingMessage = realMapper.readTree("{\"data\":{\"discussionId\":\"d2\",\"count\":1}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, userId);
+        dbRecord.put(Constants.SUB_CATEGORY, NotificationSubCategory.LIKED_COMMENT.name());
+        dbRecord.put(Constants.CREATED_AT, createdAt);
+        dbRecord.put(Constants.MESSAGE, existingMessage.toString());
+
+        // mock Cassandra returning this record
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+
+        // mock ObjectMapper so it doesn’t return null
+        when(objectMapper.readTree(existingMessage.toString())).thenReturn(existingMessage);
+        when(objectMapper.readTree(requestNode.get("message").toString())).thenReturn(requestNode.get("message"));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, NotificationSubCategory.LIKED_POST, userId, requestNode);
+
+        // since subcategories differ, update should never be called
+        verify(cassandraOperation, never())
+                .updateRecordByCompositeKey(any(), any(), anyMap(), anyMap());
+    }
+
+
+    @Test
+    void testUpdateNotificationMessage_IncrementsCountAndUpdatesBody() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode messageNode = mapper.readTree("{\"data\":{\"count\":1},\"body\":\"old\"}");
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "updateNotificationMessage", NotificationSubCategory.class, JsonNode.class);
+        method.setAccessible(true);
+
+        JsonNode updated = (JsonNode) method.invoke(notificationService, NotificationSubCategory.LIKED_POST, messageNode);
+
+        assertEquals(2, updated.get("data").get("count").asInt());
+        assertTrue(updated.get("body").asText().contains("2"));
+    }
+
+    @Test
+    void testConstructMessage_ReplacesPlaceholderCorrectly() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "constructMessage", NotificationSubCategory.class, Map.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(notificationService,
+                NotificationSubCategory.LIKED_POST, Map.of("count", "5"));
+
+        assertTrue(result.contains("5 users liked your post"));
+    }
+
+
+    @Test
+    void testConstructMessage_IgnoresMissingPlaceholder() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "constructMessage", NotificationSubCategory.class, Map.class);
+        method.setAccessible(true);
+
+        String result = (String) method.invoke(notificationService,
+                NotificationSubCategory.LIKED_POST, Map.of());
+
+        assertTrue(result.contains("{count}"));
+    }
+
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_DisabledNotifications_ReturnsEmptyList() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        NotificationSettingEntity entity = new NotificationSettingEntity();
+        entity.setEnabled(false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(eq(userId), any()))
+                .thenReturn(Optional.of(entity));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(0, result.get(Constants.TOTAL_COUNT));
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_FiltersDeletedNotifications() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n1");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, true);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertTrue(notifications.isEmpty());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_FiltersBySubType() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n1");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+        notif.put(Constants.SUB_TYPE, "announcement");
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, "announcement");
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_HandlesException_ReturnsInternalServerError() {
+        String authToken = "Bearer abc";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenThrow(new RuntimeException("DB error"));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_FiltersReadNotifications() {
+        String authToken = "Bearer xyz";
+        String userId = "u456";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n2");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, true);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.UNREAD, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertTrue(notifications.isEmpty());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_ReturnsOnlyReadNotifications() {
+        String authToken = "Bearer read";
+        String userId = "u789";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n3");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, true);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.READ, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_NoSettingsFound_ReturnsNotifications() {
+        String authToken = "Bearer missing";
+        String userId = "u999";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n4");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(eq(userId), any()))
+                .thenReturn(Optional.empty());
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_ThrowsOnCassandraError() {
+        String authToken = "Bearer crash";
+        String userId = "u111";
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+                .thenThrow(new RuntimeException("Cassandra down"));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_ReturnsGlobalNotifications() {
+        String authToken = "Bearer global";
+        String userId = "u112";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n5");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+
+    @Test
+    void testClubNotification_ShouldInsertNewNotification_WhenNoExistingFound() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "userNew";
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"discussionId\":\"d1\"}");
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        when(objectMapper.writeValueAsString(any(JsonNode.class)))
+                .thenReturn("{\"discussionId\":\"d1\"}");
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        // Verify 3-arg insertRecord
+        verify(cassandraOperation, times(1))
+                .insertRecord(anyString(), anyString(), anyMap());
+    }
+
+
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_PaginationWorks() {
+        String authToken = "Bearer page";
+        String userId = "u222";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n6");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 1, 10, NotificationReadStatus.BOTH, null); // offset=1
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(0, ((List<?>) result.get(Constants.NOTIFICATIONS)).size());
+    }
+
+
+    @Test
+    void testGetUnreadNotificationCount_countObjNotNumber() {
+        String authToken = "Bearer token";
+        String userId = "u123";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+
+        Map<String, Object> record = new HashMap<>();
+        record.put(Constants.COUNT, "not-a-number"); // invalid type
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
+                .thenReturn(List.of(record));
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(authToken, 7);
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+
+        assertEquals(0, result.get("unread"));
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_withLastUpdatedNull() {
+        String authToken = "Bearer token";
+        String userId = "u123";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+
+        Map<String, Object> record = new HashMap<>();
+        record.put(Constants.COUNT, 5);
+        record.put(Constants.UPDATED_AT, null);
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
+                .thenReturn(List.of(record));
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(authToken, 7);
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+
+        assertEquals(5, result.get("unread"));
+    }
+
+    @Test
+    void testGetUnreadNotificationCount_withLastUpdatedNotNullAndNoGlobalNotifs() {
+        String authToken = "Bearer token";
+        String userId = "u123";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+
+        Instant lastUpdated = Instant.now();
+        Map<String, Object> record = new HashMap<>();
+        record.put(Constants.COUNT, 2);
+        record.put(Constants.UPDATED_AT, lastUpdated);
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
+                .thenReturn(List.of(record));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(Collections.emptyList());
+
+        ApiResponse response = notificationService.getUnreadNotificationCount(authToken, 7);
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+
+        assertEquals(2, result.get("unread"));
+    }
+
+// ---------- clubNotification ----------
+
+    @Test
+    void testClubNotification_SkipsWhenDifferentSubCategory() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user123";
+
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, userId);
+        dbRecord.put(Constants.SUB_CATEGORY, NotificationSubCategory.LIKED_COMMENT.name()); // different subCategory
+        dbRecord.put(Constants.CREATED_AT, Instant.now());
+        dbRecord.put(Constants.MESSAGE, "{\"data\":{\"discussionId\":\"d1\"}}");
+
+        // ✅ Ensure readTree returns a real JsonNode instead of null
+        when(objectMapper.readTree(anyString()))
+                .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                any(), any(), any(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        // ✅ Should skip update since subCategory mismatches
+        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+    }
+
+
+    @Test
+    void testClubNotification_SkipsWhenClubWindowExpired() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user123";
+
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, userId);
+        dbRecord.put(Constants.SUB_CATEGORY, subCategory.name());
+        dbRecord.put(Constants.CREATED_AT, Instant.now().minus(Duration.ofHours(1))); // expired
+        dbRecord.put(Constants.MESSAGE, "{\"data\":{\"discussionId\":\"d1\"}}");
+
+        // ✅ Ensure mock objectMapper delegates to real mapper
+        when(objectMapper.readTree(anyString()))
+                .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        // ✅ Since clubWindow expired, no update should happen
+        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+    }
+
+
+    @Test
+    void testClubNotification_SkipsWhenUserMismatch() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        ObjectMapper realMapper = new ObjectMapper();
+
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, "otherUser"); // mismatched user
+        dbRecord.put(Constants.SUB_CATEGORY, subCategory.name());
+        dbRecord.put(Constants.CREATED_AT, Instant.now());
+        dbRecord.put(Constants.MESSAGE, "{\"data\":{\"discussionId\":\"d1\"}}");
+
+        // ✅ Explicit cast to String avoids ambiguity
+        when(objectMapper.readTree(anyString()))
+                .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, "user123", requestNode);
+
+        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+    }
+
+
+
+    @Test
+    void testClubNotification_SkipsWhenClubKeyMismatch() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user123";
+
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"x\"}}}");
+
+        Map<String, Object> dbRecord = new HashMap<>();
+        dbRecord.put(Constants.USER_ID, userId);
+        dbRecord.put(Constants.SUB_CATEGORY, subCategory.name());
+        dbRecord.put(Constants.CREATED_AT, Instant.now());
+        dbRecord.put(Constants.MESSAGE, "{\"data\":{\"discussionId\":\"y\"}}");
+
+        // ✅ Make mocked objectMapper delegate to real ObjectMapper
+        when(objectMapper.readTree(anyString()))
+                .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+                .thenReturn(List.of(dbRecord));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        // ✅ Since keys mismatch, no update should happen
+        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+    }
+
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_FiltersByReadStatusRead() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n1");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, true);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.READ, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_FiltersByReadStatusUnread() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        Instant now = Instant.now();
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n1");
+        notif.put(Constants.CREATED_AT, now);
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.UNREAD, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_MergesGlobalAndUserNotifications() {
+        String authToken = "Bearer abc";
+        String userId = "u123";
+        Instant now = Instant.now();
+
+        Map<String, Object> userNotif = new HashMap<>();
+        userNotif.put(Constants.NOTIFICATION_ID, "n1");
+        userNotif.put(Constants.CREATED_AT, now);
+        userNotif.put(Constants.IS_DELETED, false);
+
+        Map<String, Object> globalNotif = new HashMap<>();
+        globalNotif.put(Constants.NOTIFICATION_ID, "g1");
+        globalNotif.put(Constants.CREATED_AT, now);
+        globalNotif.put(Constants.IS_DELETED, false);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(userNotif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(globalNotif));
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<?> notifications = (List<?>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(2, notifications.size());
+    }
+
+
+    @Test
+    void testCreateNotification_BlankUserId() {
+        ObjectMapper realMapper = new ObjectMapper(); // real mapper
+        JsonNode request = realMapper.createObjectNode().put(Constants.TYPE, "IN_APP");
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken("token")).thenReturn("");
+
+        ApiResponse response = notificationService.createNotification(request, "token");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+    }
+
+
+    @Test
+    void testCreateNotification_BlankNotificationType() {
+        ObjectMapper realMapper = new ObjectMapper(); // real mapper for test JSON
+        JsonNode request = realMapper.createObjectNode()
+                .set(Constants.REQUEST, realMapper.createObjectNode()); // no type inside
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken("token")).thenReturn("u1");
+
+        ApiResponse response = notificationService.createNotification(request, "token");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
+
+
+    @Test
+    void testCreateNotification_ExceptionDuringInsert() {
+        ObjectMapper realMapper = new ObjectMapper(); // real mapper for test JSON
+        JsonNode innerRequest = realMapper.createObjectNode().put(Constants.TYPE, "IN_APP");
+        JsonNode request = realMapper.createObjectNode().set(Constants.REQUEST, innerRequest);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken("token")).thenReturn("u1");
+        when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
+                .thenThrow(new RuntimeException("DB fail"));
+
+        ApiResponse response = notificationService.createNotification(request, "token");
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+
+    @Test
+    void testBulkCreateNotifications_InvalidUserIds() {
+        ObjectMapper realMapper = new ObjectMapper(); // real instance for JSON building
+
+        JsonNode request = realMapper.createObjectNode()
+                .set(Constants.REQUEST, realMapper.createObjectNode()
+                        .put(Constants.TYPE, "IN_APP")
+                        .put(Constants.SUB_CATEGORY, "CONTENT_PUBLISHED")); // no user_ids
+
+        ApiResponse response = notificationService.bulkCreateNotifications(request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
+
+
+    @Test
+    void testBulkCreateNotifications_TooManyUsers() {
+        ObjectMapper realMapper = new ObjectMapper(); // real mapper for test JSON
+
+        ArrayNode userIds = realMapper.createArrayNode();
+        for (int i = 0; i < Constants.MAX_USER_LIMIT + 1; i++) {
+            userIds.add(realMapper.createObjectNode().put(Constants.USER_ID, "u" + i));
+        }
+
+        JsonNode request = realMapper.createObjectNode()
+                .set(Constants.REQUEST, realMapper.createObjectNode()
+                        .put(Constants.TYPE, "IN_APP")
+                        .put(Constants.SUB_CATEGORY, "CONTENT_PUBLISHED")
+                        .set(Constants.USER_IDS, userIds));
+
+        ApiResponse response = notificationService.bulkCreateNotifications(request);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
+
+
+    @Test
+    void testIsGlobalSubCategory_PositiveAndNegative() throws Exception {
+        assertTrue(invokeIsGlobalSubCategory(NotificationSubCategory.EVENT_PUBLISHED));
+        assertFalse(invokeIsGlobalSubCategory(NotificationSubCategory.LIKED_POST));
+    }
+
+    private boolean invokeIsGlobalSubCategory(NotificationSubCategory subCategory) throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("isGlobalSubCategory", NotificationSubCategory.class);
+        method.setAccessible(true);
+        return (boolean) method.invoke(notificationService, subCategory);
+    }
+
+    @Test
+    void testCreateGlobalNotification_FailedInsert() {
+        ObjectMapper realMapper = new ObjectMapper(); // real mapper for building JSON
+        JsonNode request = realMapper.createObjectNode().put(Constants.TYPE, "IN_APP");
+
+        ApiResponse failedResponse = new ApiResponse();
+        failedResponse.put(Constants.RESPONSE, Constants.FAILED); // mimic failure
+
+        when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
+                .thenReturn(failedResponse);
+
+        ApiResponse response = notificationService.createGlobalNotification(
+                NotificationSubCategory.EVENT_PUBLISHED, request);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_InvalidUserId() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken("t")).thenReturn("");
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays("t", 7, 0, 5, NotificationReadStatus.BOTH, null);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
+
+    @Test
+    void testGetNotificationsByUserIdAndLastXDays_InvalidSubTypeOrderIndex() {
+        String authToken = "Bearer token";
+        String userId = "u1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+
+        Map<String, Object> notif = new HashMap<>();
+        notif.put(Constants.NOTIFICATION_ID, "n1");
+        notif.put(Constants.CREATED_AT, Instant.now());
+        notif.put(Constants.IS_DELETED, false);
+        notif.put(Constants.READ, false);
+        notif.put(Constants.SUB_TYPE, "invalidType"); // triggers Integer.MAX_VALUE
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(notif));
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of());
+
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
+                authToken, 7, 0, 10, NotificationReadStatus.BOTH, null);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_GlobalAllFlow() {
+        String authToken = "t";
+        String userId = "u1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+                .thenReturn(List.of(Map.of(Constants.NOTIFICATION_ID, "g1", Constants.CREATED_AT, Instant.now())));
+
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.TYPE, Constants.ALL);
+        request.put(Constants.ACTION, Constants.GLOBAL);
+
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testMarkNotificationsAsDeleted_FailureUpdate() {
+        String authToken = "t";
+        String userId = "u1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any()))
+                .thenReturn(Map.of(Constants.RESPONSE, Constants.FAILED));
+
+        ApiResponse response = notificationService.markNotificationsAsDeleted(authToken, List.of("n1"));
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertTrue(((List<?>) result.get(Constants.NOTIFICATIONS)).isEmpty());
+    }
+
+
+    @Test
+    void testGetResetNotificationCount_UserIdBlank() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken("t")).thenReturn("");
+
+        ApiResponse response = notificationService.getResetNotificationCount("t");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    }
+
+    @Test
+    void testGetInstant_InvalidString() {
+        Instant instant = notificationService.getInstant("not-a-date");
+        assertNull(instant);
+    }
+
+    @Test
+    void testPrepareNotificationResponse_MessageParseFails() {
+        Map<String, Object> record = new HashMap<>();
+        record.put("message", "{invalidJson"); // invalid JSON
+
+        Map<String, Object> result = notificationService.prepareNotificationResponse(record);
+
+        assertTrue(result.containsKey("message"));
+    }
 
 }

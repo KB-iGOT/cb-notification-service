@@ -14,26 +14,26 @@ class ApiResponseTest {
     @Test
     void testDefaultConstructor() {
         ApiResponse apiResponse = new ApiResponse();
-        assertNull(apiResponse.getId(), "Id should be null for default constructor");
-        assertEquals("v1", apiResponse.getVer(), "Version should be v1");
-        assertNotNull(apiResponse.getTs(), "Timestamp should not be null");
-        assertNotNull(apiResponse.getParams(), "Params should not be null");
-        assertNotNull(apiResponse.getResult(), "Result map should not be empty");
-        assertTrue(apiResponse.getResult().isEmpty(), "Result map should be empty");
-        assertNull(apiResponse.getResponseCode(), "ResponseCode should be null");
+        assertNull(apiResponse.getId());
+        assertEquals("v1", apiResponse.getVer());
+        assertNotNull(apiResponse.getTs());
+        assertNotNull(apiResponse.getParams());
+        assertNotNull(apiResponse.getResult());
+        assertTrue(apiResponse.getResult().isEmpty());
+        assertNull(apiResponse.getResponseCode());
     }
 
     @Test
     void testParameterizedConstructor() {
         String id = "api.test.id";
         ApiResponse apiResponse = new ApiResponse(id);
-        assertEquals(id, apiResponse.getId(), "Id should match the one passed in constructor");
-        assertEquals("v1", apiResponse.getVer(), "Version should be v1");
-        assertNotNull(apiResponse.getTs(), "Timestamp should not be null");
-        assertNotNull(apiResponse.getParams(), "Params should not be null");
-        assertNotNull(apiResponse.getResult(), "Result map should not be empty");
-        assertTrue(apiResponse.getResult().isEmpty(), "Result map should be empty");
-        assertNull(apiResponse.getResponseCode(), "ResponseCode should be null");
+        assertEquals(id, apiResponse.getId());
+        assertEquals("v1", apiResponse.getVer());
+        assertNotNull(apiResponse.getTs());
+        assertNotNull(apiResponse.getParams());
+        assertNotNull(apiResponse.getResult());
+        assertTrue(apiResponse.getResult().isEmpty());
+        assertNull(apiResponse.getResponseCode());
     }
 
     @Test
@@ -49,11 +49,11 @@ class ApiResponseTest {
         apiResponse.setTs(ts);
         apiResponse.setParams(params);
         apiResponse.setResponseCode(responseCode);
-        assertEquals(id, apiResponse.getId(), "Id should be updated");
-        assertEquals(ver, apiResponse.getVer(), "Version should be updated");
-        assertEquals(ts, apiResponse.getTs(), "Timestamp should be updated");
-        assertEquals(params, apiResponse.getParams(), "Params should be updated");
-        assertEquals(responseCode, apiResponse.getResponseCode(), "ResponseCode should be updated");
+        assertEquals(id, apiResponse.getId());
+        assertEquals(ver, apiResponse.getVer());
+        assertEquals(ts, apiResponse.getTs());
+        assertEquals(params, apiResponse.getParams());
+        assertEquals(responseCode, apiResponse.getResponseCode());
     }
 
     @Test
@@ -62,8 +62,8 @@ class ApiResponseTest {
         String key = "testKey";
         String value = "testValue";
         apiResponse.put(key, value);
-        assertEquals(value, apiResponse.getResult().get(key), "Result map should contain the added entry");
-        assertFalse(apiResponse.getResult().isEmpty(), "Result map should not be empty after adding an entry");
+        assertEquals(value, apiResponse.getResult().get(key));
+        assertFalse(apiResponse.getResult().isEmpty());
     }
 
     @Test
@@ -73,27 +73,26 @@ class ApiResponseTest {
         String value = "testValue";
         Map<String, Object> result = apiResponse.getResult();
         result.put(key, value);
-        assertEquals(value, apiResponse.getResult().get(key), "Result map should contain the added entry");
+        assertEquals(value, apiResponse.getResult().get(key));
     }
 
     @Test
     void testTimestampFormat() {
         ApiResponse apiResponse = new ApiResponse();
         String ts = apiResponse.getTs();
-        assertDoesNotThrow(() -> Timestamp.valueOf(ts), "Timestamp should be in a valid format");
+        assertDoesNotThrow(() -> Timestamp.valueOf(ts));
     }
 
     @Test
     void testParamsInitialization() {
         ApiResponse apiResponse = new ApiResponse();
         ApiRespParam params = apiResponse.getParams();
-
-        assertNotNull(params, "Params should not be null");
-        assertNotNull(params.getResMsgId(), "Params should have a resMsgId");
-        assertEquals(params.getResMsgId(), params.getMsgId(), "resMsgId and msgId should be equal");
-        assertNull(params.getErr(), "Error should be null by default");
-        assertNull(params.getErrMsg(), "Error message should be null by default");
-        assertNull(params.getStatus(), "Status should be null by default");
+        assertNotNull(params);
+        assertNotNull(params.getResMsgId());
+        assertEquals(params.getResMsgId(), params.getMsgId());
+        assertNull(params.getErr());
+        assertNull(params.getErrMsg());
+        assertNull(params.getStatus());
     }
 
     @Test
@@ -102,9 +101,218 @@ class ApiResponseTest {
         apiResponse.put("key1", "value1");
         apiResponse.put("key2", 123);
         apiResponse.put("key3", true);
-        assertEquals(3, apiResponse.getResult().size(), "Result map should contain 3 entries");
-        assertEquals("value1", apiResponse.getResult().get("key1"), "First value should match");
-        assertEquals(123, apiResponse.getResult().get("key2"), "Second value should match");
-        assertEquals(true, apiResponse.getResult().get("key3"), "Third value should match");
+        assertEquals(3, apiResponse.getResult().size());
+        assertEquals("value1", apiResponse.getResult().get("key1"));
+        assertEquals(123, apiResponse.getResult().get("key2"));
+        assertEquals(true, apiResponse.getResult().get("key3"));
+    }
+
+    @Test
+    void testSetResultReplacesResponse() {
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.put("oldKey", "oldValue");
+        Map<String, Object> newResult = new HashMap<>();
+        newResult.put("newKey", "newValue");
+        apiResponse.setResult(newResult);
+        assertEquals("newValue", apiResponse.get("newKey"));
+        assertNull(apiResponse.get("oldKey"));
+    }
+
+    @Test
+    void testGetReturnsNullForMissingKey() {
+        ApiResponse apiResponse = new ApiResponse();
+        assertNull(apiResponse.get("nonexistentKey"));
+    }
+
+    @Test
+    void testEqualsAndHashCode_sameObject() {
+        ApiResponse r1 = new ApiResponse("id1");
+        assertEquals(r1, r1);
+        assertEquals(r1.hashCode(), r1.hashCode());
+    }
+
+    @Test
+    void testEquals_notEqualDifferentId() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_notEqualNull() {
+        ApiResponse r1 = new ApiResponse("id1");
+        assertNotEquals(r1, null);
+    }
+
+    @Test
+    void testEquals_notEqualDifferentClass() {
+        ApiResponse r1 = new ApiResponse("id1");
+        assertNotEquals(r1, "someString");
+    }
+
+    @Test
+    void testToStringContainsId() {
+        ApiResponse r1 = new ApiResponse("id1");
+        String str = r1.toString();
+        assertTrue(str.contains("id1"));
+    }
+
+    @Test
+    void testEquals_idNullVsNonNull() {
+        ApiResponse r1 = new ApiResponse();
+        ApiResponse r2 = new ApiResponse();
+        r1.setId(null);
+        r2.setId("id2");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_responseCodeMismatch() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setResponseCode(HttpStatus.OK);
+        r2.setResponseCode(HttpStatus.BAD_REQUEST);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_equalObjects() {
+        ApiRespParam params = new ApiRespParam("msg-123");
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setVer("v1");
+        r2.setVer("v1");
+        r1.setParams(params);
+        r2.setParams(params);
+        r1.setResponseCode(null);
+        r2.setResponseCode(null);
+        r1.setResult(new HashMap<>());
+        r2.setResult(new HashMap<>());
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void testEquals_bothIdsNull() {
+        ApiRespParam sharedParams = new ApiRespParam("same-msg-id");
+        ApiResponse r1 = new ApiResponse();
+        ApiResponse r2 = new ApiResponse();
+        r1.setId(null);
+        r2.setId(null);
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setVer("v1");
+        r2.setVer("v1");
+        r1.setParams(sharedParams);
+        r2.setParams(sharedParams);
+        r1.setResult(new HashMap<>());
+        r2.setResult(new HashMap<>());
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void testEquals_nullVsNonNullVer() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setVer(null);
+        r2.setVer("v2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_nullVsNonNullTs() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        r1.setTs(null);
+        r2.setTs("2025-09-15 10:00:00.0");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_paramsDifferentObjects() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setVer("v1");
+        r2.setVer("v1");
+        r1.setParams(new ApiRespParam("msg1"));
+        r2.setParams(new ApiRespParam("msg2"));
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_bothResponseNull() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        r1.setVer("v1");
+        r2.setVer("v1");
+        ApiRespParam sharedParams = new ApiRespParam("msg");
+        r1.setParams(sharedParams);
+        r2.setParams(sharedParams);
+        r1.setResult(null);
+        r2.setResult(null);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void testEquals_nullComparison() {
+        ApiResponse r1 = new ApiResponse("id1");
+        assertNotEquals(r1, null);
+    }
+
+    @Test
+    void testEquals_differentClass() {
+        ApiResponse r1 = new ApiResponse("id1");
+        assertNotEquals(r1, "string");
+    }
+
+    @Test
+    void testEquals_verBothNull() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        ApiRespParam sharedParams = new ApiRespParam("msg");
+        r1.setParams(sharedParams);
+        r2.setParams(sharedParams);
+        r1.setVer(null);
+        r2.setVer(null);
+        assertEquals(r1, r2);
+    }
+
+    @Test
+    void testEquals_responseCodeNullVsNonNull() {
+        ApiResponse r1 = new ApiResponse("id1");
+        ApiResponse r2 = new ApiResponse("id1");
+        String fixedTs = "2025-09-15 10:00:00.0";
+        r1.setTs(fixedTs);
+        r2.setTs(fixedTs);
+        ApiRespParam sharedParams = new ApiRespParam("msg");
+        r1.setParams(sharedParams);
+        r2.setParams(sharedParams);
+        r1.setResponseCode(null);
+        r2.setResponseCode(HttpStatus.OK);
+        assertNotEquals(r1, r2);
     }
 }
