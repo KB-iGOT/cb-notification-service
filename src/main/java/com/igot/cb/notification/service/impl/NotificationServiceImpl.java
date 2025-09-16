@@ -725,8 +725,8 @@ public class NotificationServiceImpl implements NotificationService {
                 }
             }
 
+            userNotifications = fetchNotifications(userId);
             if (ALL.equalsIgnoreCase(type)) {
-                userNotifications = fetchNotifications(userId);
                 notificationIds = userNotifications.stream()
                         .map(n -> (String) n.get(NOTIFICATION_ID))
                         .collect(Collectors.toList());
