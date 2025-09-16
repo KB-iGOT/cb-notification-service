@@ -3,6 +3,8 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
@@ -1774,5 +1776,72 @@ class NotificationServiceImplTest {
 
         assertTrue(result.containsKey("message"));
     }
+
+    @Test
+    void testCreateNotification_DisabledSetting() throws Exception {
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode request = realMapper.createObjectNode()
+                .set(Constants.REQUEST, realMapper.createObjectNode()
+                        .put(Constants.TYPE, "IN_APP"));
+
+        NotificationSettingEntity entity = new NotificationSettingEntity();
+        entity.setEnabled(false);
+        when(accessTokenValidator.fetchUserIdFromAccessToken("t")).thenReturn("u1");
+        when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse("u1", "IN_APP"))
+                .thenReturn(Optional.of(entity));
+
+        ApiResponse response = notificationService.createNotification(request, "t");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertTrue(((Map<?, ?>) result).isEmpty());
+    }
+
+
+    @Test
+    void testGetUnreadNotificationCount_NoRecords() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken("t")).thenReturn("u1");
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
+                .thenReturn(Collections.emptyList());
+
+        ApiResponse response = notificationService.getUnreadNotificationCount("t", 7);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        assertEquals(0, result.get("unread"));
+    }
+
+    @Test
+    void testCreateGlobalNotification_Exception() {
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode request = realMapper.createObjectNode().put(Constants.TYPE, "IN_APP");
+
+        when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
+                .thenThrow(new RuntimeException("DB error"));
+
+        ApiResponse response = notificationService.createGlobalNotification(NotificationSubCategory.EVENT_PUBLISHED, request);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+    }
+
+    @Test
+    void testClubNotification_ReadTreeThrowsException() throws Exception {
+        NotificationSubCategory subCategory = NotificationSubCategory.LIKED_POST;
+        String userId = "user1";
+        ObjectMapper realMapper = new ObjectMapper();
+        JsonNode requestNode = realMapper.createObjectNode().put("message", "invalidJson");
+
+        when(objectMapper.readTree(anyString())).thenThrow(new RuntimeException("parse fail"));
+
+        Method method = NotificationServiceImpl.class.getDeclaredMethod(
+                "clubNotification", NotificationSubCategory.class, String.class, JsonNode.class);
+        method.setAccessible(true);
+
+        // Should not throw
+        method.invoke(notificationService, subCategory, userId, requestNode);
+
+        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+    }
+
 
 }
