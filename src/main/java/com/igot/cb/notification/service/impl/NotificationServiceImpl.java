@@ -683,15 +683,16 @@ public class NotificationServiceImpl implements NotificationService {
         String action = (String) request.get(ACTION);
 
         try {
-            List<Map<String, Object>> userNotifications = fetchNotifications(userId);
+            List<Map<String, Object>> userNotifications = new ArrayList<>();
             List<String> notificationIds;
+            List<Map<String, Object>> insertedAndMarked = new ArrayList<>();
 
 
             if (GLOBAL.equalsIgnoreCase(action)) {
                 if (ALL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'all' - inserting and marking global notifications as read for user {}", userId);
                     List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
-                    List<Map<String, Object>> insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
+                    insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
                     response.getParams().setErrMsg("Global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
@@ -711,7 +712,7 @@ public class NotificationServiceImpl implements NotificationService {
                         return response;
                     }
 
-                    List<Map<String, Object>> insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, targetGlobals);
+                    insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, targetGlobals);
                     response.getParams().setErrMsg("Selected global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
@@ -725,9 +726,12 @@ public class NotificationServiceImpl implements NotificationService {
             }
 
             if (ALL.equalsIgnoreCase(type)) {
+                userNotifications = fetchNotifications(userId);
                 notificationIds = userNotifications.stream()
                         .map(n -> (String) n.get(NOTIFICATION_ID))
                         .collect(Collectors.toList());
+                List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
+                insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
             } else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                 notificationIds = extractIndividualNotificationIds(request, response);
                 if (notificationIds == null) return response;
@@ -737,7 +741,7 @@ public class NotificationServiceImpl implements NotificationService {
             }
 
             List<Map<String, Object>> updated = processReadUpdate(userId, userNotifications, notificationIds);
-
+            updated.addAll(insertedAndMarked);
             response.getParams().setErrMsg("Notifications updated successfully");
             response.getParams().setStatus(Constants.SUCCESS);
             response.setResponseCode(HttpStatus.OK);
