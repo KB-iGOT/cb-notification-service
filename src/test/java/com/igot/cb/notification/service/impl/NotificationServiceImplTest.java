@@ -923,5 +923,132 @@ class NotificationServiceImplTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
     }
 
+    @Test
+    void testMarkNotificationsAsRead_GlobalAll() {
+        String userId = "user-123";
+        Map<String, Object> request = new HashMap<>();
+        request.put("action", "GLOBAL");
+        request.put("type", "ALL");
 
+        // Mock methods
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()
+        )).thenReturn(new ArrayList<>()); // Simulate fetching global notifications
+
+        // Call the method
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+
+        // Assert
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Global notifications marked as read"));
+        assertNotNull(response.getResult());
+    }
+
+
+    @Test
+    void testMarkNotificationsAsRead_InvalidType() {
+        String userId = "user-123";
+        Map<String, Object> request = new HashMap<>();
+        request.put("action", "GLOBAL");
+        request.put("type", "INVALID_TYPE");
+
+        // Mock methods
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+
+        // Call the method
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+
+        // Assert
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Invalid type. Allowed values: all, individual"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_MissingType() {
+        String userId = "user-123";
+        Map<String, Object> request = new HashMap<>();
+        request.put("action", "GLOBAL");
+
+        // Mock methods
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+
+        // Call the method
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+
+        // Assert
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Request type must be provided"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_GlobalIndividual_MatchingNotifications_UsingReflection() throws Exception {
+        String userId = "user-123";
+        Map<String, Object> request = new HashMap<>();
+        request.put("action", "GLOBAL");
+        request.put("type", "INDIVIDUAL");
+        request.put("ids", Arrays.asList("notification-id-1", "notification-id-2"));
+
+        // Mock methods
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+
+        // Simulate fetching global notifications
+        List<Map<String, Object>> globalNotifications = Arrays.asList(
+                Map.of(NOTIFICATION_ID, "notification-id-1", "read", false),
+                Map.of(NOTIFICATION_ID, "notification-id-2", "read", false)
+        );
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()
+        )).thenReturn(globalNotifications);
+
+        // Simulate the behavior of insertAndMarkGlobalNotificationsAsRead using reflection
+        List<Map<String, Object>> targetNotifications = Arrays.asList(
+                Map.of("notificationId", "notification-id-1", "read", true),
+                Map.of("notificationId", "notification-id-2", "read", true)
+        );
+
+        // Use reflection to access the private method extractIndividualNotificationIds
+        Method extractMethod = NotificationServiceImpl.class.getDeclaredMethod("extractIndividualNotificationIds", Map.class, ApiResponse.class);
+        extractMethod.setAccessible(true); // Make the private method accessible
+
+        // Create a mock ApiResponse
+        ApiResponse mockResponse = new ApiResponse();
+
+        // Invoke the private method using reflection to extract individual notification IDs
+        List<String> notificationIds = (List<String>) extractMethod.invoke(notificationService, request, mockResponse);
+
+        // Assert the result from extractIndividualNotificationIds
+        assertNotNull(notificationIds);
+        assertEquals(2, notificationIds.size());
+        assertTrue(notificationIds.contains("notification-id-1"));
+        assertTrue(notificationIds.contains("notification-id-2"));
+
+        // Use reflection to access the private method insertAndMarkGlobalNotificationsAsRead
+        Method insertMethod = NotificationServiceImpl.class.getDeclaredMethod("insertAndMarkGlobalNotificationsAsRead", String.class, List.class);
+        insertMethod.setAccessible(true); // Make the private method accessible
+
+        // Invoke the private method using reflection to insert and mark notifications as read
+        List<Map<String, Object>> result = (List<Map<String, Object>>) insertMethod.invoke(
+                notificationService, userId, globalNotifications
+        );
+
+        // Assert the results from the private method insertAndMarkGlobalNotificationsAsRead
+        assertNotNull(result);
+        assertEquals(globalNotifications.size(), result.size());
+
+        // Verify that the notifications were marked as read
+        for (Map<String, Object> notification : result) {
+            assertTrue((Boolean) notification.get("read"));
+        }
+
+        // Now, simulate the public method markNotificationsAsRead (this invokes the private methods internally)
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+
+        // Assert the response
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Selected global notifications marked as read and inserted"));
+        assertNotNull(response.getResult());
+        Map<String, Object> finalResult = (Map<String, Object>) response.getResult();
+        assertEquals(targetNotifications.size(), ((List<?>) finalResult.get("notifications")).size());
+    }
 }
