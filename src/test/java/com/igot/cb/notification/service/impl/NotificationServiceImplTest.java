@@ -1843,7 +1843,7 @@ class NotificationServiceImplTest {
         verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
     }
 
-=======
+
     void testMarkNotificationsAsRead_GlobalAll() {
         String userId = "user-123";
         Map<String, Object> request = new HashMap<>();
