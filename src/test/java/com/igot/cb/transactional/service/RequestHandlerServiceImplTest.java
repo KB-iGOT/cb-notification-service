@@ -179,4 +179,37 @@ class RequestHandlerServiceImplTest {
         // Assert
         assertNull(result);
     }
+
+
+    @Test
+    void fetchResultUsingPost_HttpClientErrorExceptionWithInvalidJson() {
+        String uri = "http://test.com/api";
+        Object request = Map.of("key", "value");
+        String errorResponse = "not-json"; // invalid JSON
+
+        when(restTemplate.postForObject(eq(uri), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Bad Request",
+                        errorResponse.getBytes(), StandardCharsets.UTF_8));
+
+        Map<String, Object> result = requestHandlerService.fetchResultUsingPost(uri, request, null);
+
+        // Should remain null because JSON parsing failed
+        assertNull(result);
+    }
+
+
+
+    @Test
+    void fetchUsingGetWithHeadersProfile_HttpClientErrorExceptionWithInvalidJson() {
+        String uri = "http://test.com/api";
+        String errorResponse = "not-json";
+
+        when(restTemplate.exchange(eq(uri), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(new HttpClientErrorException(HttpStatus.BAD_REQUEST, "Bad Request",
+                        errorResponse.getBytes(), StandardCharsets.UTF_8));
+
+        Object result = requestHandlerService.fetchUsingGetWithHeadersProfile(uri, null);
+
+        assertNull(result); // JSON parsing fails, stays null
+    }
 }
