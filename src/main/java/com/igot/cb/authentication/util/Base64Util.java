@@ -234,6 +234,8 @@ public class Base64Util {
                 case 2:
                     output_len += 3;
                     break;
+                default:
+                    break;
             }
         }
 
@@ -491,6 +493,8 @@ public class Base64Util {
                             return false;
                         }
                         break;
+                    default:
+                       break;
                 }
             }
 
@@ -510,7 +514,7 @@ public class Base64Util {
                 case 0:
                     // Output length is a multiple of three.  Fine.
                     break;
-                case 1:
+                case 1, 4:
                     // Read one extra input byte, which isn't enough to
                     // make another output byte.  Illegal.
                     this.state = 6;
@@ -526,13 +530,11 @@ public class Base64Util {
                     output[op++] = (byte) (value >> 10);
                     output[op++] = (byte) (value >> 2);
                     break;
-                case 4:
-                    // Read one padding '=' when we expected 2.  Illegal.
-                    this.state = 6;
-                    return false;
                 case 5:
                     // Read all the padding '='s we expected and no more.
                     // Fine.
+                    break;
+                default:
                     break;
             }
 
@@ -630,7 +632,6 @@ public class Base64Util {
                                 (input[p++] & 0xff);
                         tailLen = 0;
                     }
-                    ;
                     break;
 
                 case 2:
@@ -641,6 +642,8 @@ public class Base64Util {
                                 (input[p++] & 0xff);
                         tailLen = 0;
                     }
+                    break;
+                default :
                     break;
             }
 

@@ -463,6 +463,10 @@ public class Constants {
     public static final String DELETED = "deleted";
     public static final String GLOBAL = "global";
     public static final String ACTION = "action";
+    public static final String DISCUSSION_ID = "discussionId";
+    public static final String MISSING_OR_INVALID_REQUEST_NODE = "Missing or invalid 'request' node: ";
+    public static final String DATACENTER = "datacenter1";
+    public static final String DATE_FORMAT_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
     private Constants() {
     }
