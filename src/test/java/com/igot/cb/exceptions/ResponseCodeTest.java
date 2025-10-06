@@ -10,7 +10,7 @@ class ResponseCodeTest {
     @Test
     void testGetResponse_withUnauthorizedCode() {
         ResponseCode code = ResponseCode.getResponse(Constants.UNAUTHORIZED);
-        assertEquals(ResponseCode.unAuthorized, code);
+        assertEquals(ResponseCode.UNAUTHORIZED, code);
     }
 
     @Test
@@ -18,12 +18,12 @@ class ResponseCodeTest {
         // The errorCode for unAuthorized is ResponseMessage.Key.UNAUTHORIZED_USER
         String knownCode = ResponseMessage.Key.UNAUTHORIZED_USER;
         ResponseCode code = ResponseCode.getResponse(knownCode);
-        assertEquals(ResponseCode.unAuthorized, code);
+        assertEquals(ResponseCode.UNAUTHORIZED, code);
 
         // The errorCode for internalError is ResponseMessage.Key.INTERNAL_ERROR
         knownCode = ResponseMessage.Key.INTERNAL_ERROR;
         code = ResponseCode.getResponse(knownCode);
-        assertEquals(ResponseCode.internalError, code);
+        assertEquals(ResponseCode.INTERNAL_ERROR, code);
     }
 
     @Test
@@ -44,19 +44,19 @@ class ResponseCodeTest {
 
     @Test
     void testGetMessage_alwaysReturnsEmptyString() {
-        assertEquals("", ResponseCode.unAuthorized.getMessage(401));
+        assertEquals("", ResponseCode.UNAUTHORIZED.getMessage(401));
         assertEquals("", ResponseCode.OK.getMessage(200));
     }
 
     @Test
     void testErrorCodeAndMessageForUnAuthorized() {
-        assertEquals(ResponseMessage.Key.UNAUTHORIZED_USER, ResponseCode.unAuthorized.getErrorCode());
-        assertEquals(ResponseMessage.Message.UNAUTHORIZED_USER, ResponseCode.unAuthorized.getErrorMessage());
+        assertEquals(ResponseMessage.Key.UNAUTHORIZED_USER, ResponseCode.UNAUTHORIZED.getErrorCode());
+        assertEquals(ResponseMessage.Message.UNAUTHORIZED_USER, ResponseCode.UNAUTHORIZED.getErrorMessage());
     }
 
     @Test
     void testErrorCodeAndMessageForInternalError() {
-        assertEquals(ResponseMessage.Key.INTERNAL_ERROR, ResponseCode.internalError.getErrorCode());
-        assertEquals(ResponseMessage.Message.INTERNAL_ERROR, ResponseCode.internalError.getErrorMessage());
+        assertEquals(ResponseMessage.Key.INTERNAL_ERROR, ResponseCode.INTERNAL_ERROR.getErrorCode());
+        assertEquals(ResponseMessage.Message.INTERNAL_ERROR, ResponseCode.INTERNAL_ERROR.getErrorMessage());
     }
 }

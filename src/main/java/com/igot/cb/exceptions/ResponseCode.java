@@ -8,8 +8,8 @@ import org.apache.commons.lang3.StringUtils;
 
 @Getter
 public enum ResponseCode {
-    unAuthorized(ResponseMessage.Key.UNAUTHORIZED_USER, ResponseMessage.Message.UNAUTHORIZED_USER),
-    internalError(ResponseMessage.Key.INTERNAL_ERROR, ResponseMessage.Message.INTERNAL_ERROR),
+    UNAUTHORIZED(ResponseMessage.Key.UNAUTHORIZED_USER, ResponseMessage.Message.UNAUTHORIZED_USER),
+    INTERNAL_ERROR(ResponseMessage.Key.INTERNAL_ERROR, ResponseMessage.Message.INTERNAL_ERROR),
 
     OK(200),
     CLIENT_ERROR(400),
@@ -45,7 +45,7 @@ public enum ResponseCode {
         if (StringUtils.isBlank(errorCode)) {
             return null;
         } else if (Constants.UNAUTHORIZED.equals(errorCode)) {
-            return ResponseCode.unAuthorized;
+            return ResponseCode.UNAUTHORIZED;
         } else {
             ResponseCode value = null;
             ResponseCode[] responseCodes = ResponseCode.values();
