@@ -463,6 +463,7 @@ public class Constants {
     public static final String DELETED = "deleted";
     public static final String GLOBAL = "global";
     public static final String ACTION = "action";
+    public static final int MAX_NOTIFICATIONS_FETCH_FOR_COUNT = 10;
 
     private Constants() {
     }
