@@ -25,7 +25,7 @@ public class HealthServiceImpl implements HealthService {
     private Logger log = LoggerFactory.getLogger(getClass().getName());
 
     @Override
-    public ApiResponse checkHealthStatus() throws Exception {
+    public ApiResponse checkHealthStatus() {
         ApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_HEALTH_CHECK);
         try {
             response.put(Constants.HEALTHY, true);

@@ -5,6 +5,6 @@ import com.igot.cb.util.ApiResponse;
 
 public interface HealthService {
 
-    ApiResponse checkHealthStatus() throws Exception;
+    ApiResponse checkHealthStatus();
 
 }

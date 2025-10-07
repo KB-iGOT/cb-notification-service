@@ -99,7 +99,7 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             DriverConfigLoader loader = DriverConfigLoader.programmaticBuilder()
                     .withStringList(DefaultDriverOption.CONTACT_POINTS, contactPointsString)
                     .withString(DefaultDriverOption.REQUEST_CONSISTENCY, consistencyLevel.name())
-                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, "datacenter1")
+                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, Constants.DATACENTER)
                     .withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE,
                             Integer.parseInt(cache.getProperty(Constants.CORE_CONNECTIONS_PER_HOST_FOR_LOCAL)))
                     .withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE,
@@ -117,14 +117,14 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             if (StringUtils.isNotBlank(keySpaceName)) {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(Constants.DATACENTER)
                         .withKeyspace(keySpaceName)
                         .withConfigLoader(loader)
                         .build();
             } else {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(Constants.DATACENTER)
                         .withConfigLoader(loader)
                         .build();
             }

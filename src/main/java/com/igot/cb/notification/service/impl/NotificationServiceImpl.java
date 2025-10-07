@@ -67,7 +67,7 @@ public class NotificationServiceImpl implements NotificationService {
 
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
+                log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
                 updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
@@ -113,7 +113,7 @@ public class NotificationServiceImpl implements NotificationService {
                     }
                 }
             } else {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
+                log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
                 outgoingResponse.getParams().setErrMsg("Missing or invalid 'request' node in payload");
                 outgoingResponse.getParams().setStatus(Constants.FAILED);
                 outgoingResponse.setResponseCode(HttpStatus.BAD_REQUEST);
@@ -154,7 +154,7 @@ public class NotificationServiceImpl implements NotificationService {
         try {
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
+                log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
                 updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
@@ -279,7 +279,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .toList();
 
             outgoingResponse.setResponseCode(HttpStatus.OK);
-            outgoingResponse.setResult(Map.of("notifications", responseList));
+            outgoingResponse.setResult(Map.of(Constants.NOTIFICATIONS, responseList));
             log.info("NotificationService::bulkCreateNotification: Successfully inserted {} notifications", responseList.size());
 
         } catch (Exception e) {
@@ -696,7 +696,7 @@ public class NotificationServiceImpl implements NotificationService {
                     response.getParams().setErrMsg("Global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
-                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    response.setResult(Map.of(Constants.NOTIFICATIONS, insertedAndMarked));
                     return response;
                 }else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
@@ -716,7 +716,7 @@ public class NotificationServiceImpl implements NotificationService {
                     response.getParams().setErrMsg("Selected global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
-                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    response.setResult(Map.of(Constants.NOTIFICATIONS, insertedAndMarked));
                     return response;
 
                 } else {
@@ -745,7 +745,7 @@ public class NotificationServiceImpl implements NotificationService {
             response.getParams().setErrMsg("Notifications updated successfully");
             response.getParams().setStatus(Constants.SUCCESS);
             response.setResponseCode(HttpStatus.OK);
-            response.setResult(Map.of("notifications", updated));
+            response.setResult(Map.of(Constants.NOTIFICATIONS, updated));
 
             log.info("Notifications marked as read successfully. Count: {}", updated.size());
         } catch (Exception e) {
