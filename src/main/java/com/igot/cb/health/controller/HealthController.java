@@ -16,7 +16,7 @@ public class HealthController {
     private HealthService healthService;
 
     @GetMapping("/health")
-    public ResponseEntity<ApiResponse> healthCheck() throws Exception {
+    public ResponseEntity<ApiResponse> healthCheck() {
         ApiResponse response = healthService.checkHealthStatus();
         return new ResponseEntity<>(response, response.getResponseCode());
     }

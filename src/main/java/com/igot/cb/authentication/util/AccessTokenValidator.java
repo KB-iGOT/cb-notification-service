@@ -80,7 +80,7 @@ public class AccessTokenValidator {
             }
             return tokenBody;
         }
-        return null;
+        return Collections.emptyMap();
     }
 
 

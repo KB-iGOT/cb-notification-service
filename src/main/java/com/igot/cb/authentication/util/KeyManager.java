@@ -39,7 +39,7 @@ public class KeyManager {
     String basePath = propertiesCache.getProperty(Constants.ACCESS_TOKEN_PUBLICKEY_BASEPATH);
     try (Stream<Path> walk = Files.walk(Paths.get(basePath))) {
       List<String> result =
-              walk.filter(Files::isRegularFile).map(Path::toString).collect(Collectors.toList());
+              walk.filter(Files::isRegularFile).map(Path::toString).toList();
       result.forEach(file -> {
         try {
           Path path = Paths.get(file);

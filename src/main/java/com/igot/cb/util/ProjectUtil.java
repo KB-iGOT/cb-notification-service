@@ -23,12 +23,12 @@ private final Logger logger = LoggerFactory.getLogger(Object.class);
      */
     public static CustomException createServerError(ResponseCode responseCode) {
         return new CustomException(responseCode.getErrorCode(), responseCode.getErrorMessage(),
-                ResponseCode.SERVER_ERROR.getResponseCode());
+                ResponseCode.SERVER_ERROR.getStatusCode());
     }
 
     public static CustomException createClientException(ResponseCode responseCode) {
         return new CustomException(responseCode.getErrorCode(), responseCode.getErrorMessage(),
-                ResponseCode.CLIENT_ERROR.getResponseCode());
+                ResponseCode.CLIENT_ERROR.getStatusCode());
     }
 
     public static ApiResponse createDefaultResponse(String api) {

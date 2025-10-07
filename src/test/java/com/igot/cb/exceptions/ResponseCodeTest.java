@@ -34,9 +34,9 @@ class ResponseCodeTest {
 
     @Test
     void testEnumValues_forOKAndErrors() {
-        assertEquals(200, ResponseCode.OK.getResponseCode());
-        assertEquals(400, ResponseCode.CLIENT_ERROR.getResponseCode());
-        assertEquals(500, ResponseCode.SERVER_ERROR.getResponseCode());
+        assertEquals(200, ResponseCode.OK.getStatusCode());
+        assertEquals(400, ResponseCode.CLIENT_ERROR.getStatusCode());
+        assertEquals(500, ResponseCode.SERVER_ERROR.getStatusCode());
         // errorCode and errorMessage are null for these
         assertNull(ResponseCode.OK.getErrorCode());
         assertNull(ResponseCode.OK.getErrorMessage());
