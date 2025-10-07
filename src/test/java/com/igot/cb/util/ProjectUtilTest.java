@@ -16,7 +16,7 @@ class ProjectUtilTest {
         assertNotNull(ex);
         assertEquals(ResponseCode.SERVER_ERROR.getErrorCode(), ex.getErrorCode());
         assertEquals(ResponseCode.SERVER_ERROR.getErrorMessage(), ex.getMessage()); // Lombok getter
-        assertEquals(ResponseCode.SERVER_ERROR.getResponseCode(), ex.getResponseCode());
+        assertEquals(ResponseCode.SERVER_ERROR.getStatusCode(), ex.getResponseCode());
     }
 
     @Test
@@ -26,7 +26,7 @@ class ProjectUtilTest {
         assertNotNull(ex);
         assertEquals(ResponseCode.CLIENT_ERROR.getErrorCode(), ex.getErrorCode());
         assertEquals(ResponseCode.CLIENT_ERROR.getErrorMessage(), ex.getMessage()); // Lombok getter
-        assertEquals(ResponseCode.CLIENT_ERROR.getResponseCode(), ex.getResponseCode());
+        assertEquals(ResponseCode.CLIENT_ERROR.getStatusCode(), ex.getResponseCode());
     }
 
     @Test

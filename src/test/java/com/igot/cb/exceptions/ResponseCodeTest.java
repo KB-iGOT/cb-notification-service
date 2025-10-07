@@ -43,9 +43,9 @@ class ResponseCodeTest {
     }
 
     @Test
-    void testGetMessage_alwaysReturnsEmptyString() {
-        assertEquals("", ResponseCode.UNAUTHORIZED.getMessage(401));
-        assertEquals("", ResponseCode.OK.getMessage(200));
+    void testGetErrorMessage_returnsExpectedMessage() {
+        assertEquals("You are not authorized.", ResponseCode.UNAUTHORIZED.getErrorMessage());
+        assertNull(ResponseCode.OK.getErrorMessage());
     }
 
     @Test
