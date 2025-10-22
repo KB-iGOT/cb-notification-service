@@ -24,6 +24,11 @@ import java.util.Map;
 public class RequestHandlerServiceImpl {
     private Logger log = LoggerFactory.getLogger(RequestHandlerServiceImpl.class);
 
+    // SonarQube S1192: Avoid duplicated string literals
+    private static final String LOG_MSG_TEMPLATE = "{}: {}";
+    private static final String ERROR_RECEIVED_TEMPLATE = "Error received: {}";
+    private static final String ERROR_RESPONSE_TEMPLATE = "Error Response: {}";
+
     @Autowired
     private RestTemplate restTemplate;
 
@@ -57,15 +62,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
-                log.debug("{}: {}", Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
+                log.debug(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
             }
-            log.error("Error received: {}", hce.getResponseBodyAsString(), hce);
+            log.error(ERROR_RECEIVED_TEMPLATE, hce.getResponseBodyAsString(), hce);
         } catch (JsonProcessingException e) {
-            log.error("{}: {}", Constants.PARSING_ERROR_MESSAGE, e.getMessage(), e);
+            log.error(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e.getMessage(), e);
             try {
-                log.warn("Error Response: {}", mapper.writeValueAsString(response));
+                log.warn(ERROR_RESPONSE_TEMPLATE, mapper.writeValueAsString(response));
             } catch (Exception e1) {
-                log.debug("{}: {}", Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
+                log.debug(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
             }
         }
         return response;
@@ -94,15 +99,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
-                log.debug("{}: {}", Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
+                log.debug(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
             }
-            log.error("Error received: {}", e.getResponseBodyAsString(), e);
+            log.error(ERROR_RECEIVED_TEMPLATE, e.getResponseBodyAsString(), e);
         } catch (Exception e) {
-            log.error("{}: {}", Constants.PARSING_ERROR_MESSAGE, e.getMessage(), e);
+            log.error(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e.getMessage(), e);
             try {
-                log.warn("Error Response: {}", mapper.writeValueAsString(response));
+                log.warn(ERROR_RESPONSE_TEMPLATE, mapper.writeValueAsString(response));
             } catch (Exception e1) {
-                log.debug("{}: {}", Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
+                log.debug(LOG_MSG_TEMPLATE, Constants.PARSING_ERROR_MESSAGE, e1.getMessage());
             }
         }
         return response;
