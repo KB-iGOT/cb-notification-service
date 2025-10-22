@@ -74,8 +74,6 @@ public class CassandraOperationImpl implements CassandraOperation {
             CqlSession session = connectionManager.getSession(keyspaceName);
             ResultSet results = session.execute(selectQuery.build());
             response = CassandraUtil.createResponse(results);
-            logger.info(response.toString());
-
         } catch (Exception e) {
             logger.error(Constants.EXCEPTION_MSG_FETCH + tableName + " : " + e.getMessage(), e);
         }
@@ -155,7 +153,7 @@ public class CassandraOperationImpl implements CassandraOperation {
     public Map<String, Object> updateRecord(
             String keyspaceName, String tableName, Map<String, Object> request) {
         long startTime = System.currentTimeMillis();
-        logger.debug("Cassandra Service updateRecord method started at ==" + startTime);
+        logger.debug("Cassandra Service updateRecord method started at == {}", startTime);
         Map<String, Object> response = new HashMap<>();
         String query = getUpdateQueryStatement(keyspaceName, tableName, request);
         try {
@@ -177,7 +175,7 @@ public class CassandraOperationImpl implements CassandraOperation {
             connectionManager.getSession(keyspaceName).execute(boundStatement);
             response.put(Constants.RESPONSE, Constants.SUCCESS);
             if (tableName.equalsIgnoreCase(Constants.USER)) {
-                logger.info("Cassandra Service updateRecord in user table :" + request);
+                logger.info("Cassandra Service updateRecord in user table : {}", request);
             }
         } catch (Exception e) {
             if (e.getMessage().contains(Constants.UNKNOWN_IDENTIFIER)) {
@@ -209,7 +207,6 @@ public class CassandraOperationImpl implements CassandraOperation {
 
     protected void logQueryElapseTime(
             String operation, long startTime, String query) {
-        logger.info("Cassandra query : " + query);
         long stopTime = System.currentTimeMillis();
         long elapsedTime = stopTime - startTime;
         String message =

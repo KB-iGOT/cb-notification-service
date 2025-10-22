@@ -127,10 +127,6 @@ public class CassandraUtilTest {
 
     @Test
     public void testFetchColumnsMapping() {
-        // Mock ColumnMetadata
-        ColumnMetadata column1 = mock(ColumnMetadata.class);
-        ColumnMetadata column2 = mock(ColumnMetadata.class);
-
         // Mock ColumnDefinitions
         ColumnDefinitions columnDefinitions = mock(ColumnDefinitions.class);
 

@@ -18,11 +18,12 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.mockito.Mockito.verify;
 
 @RunWith(MockitoJUnitRunner.class)
 public class CassandraOperationImplTest {
@@ -121,10 +122,10 @@ public class CassandraOperationImplTest {
 
         CassandraOperationImpl spyCassandraOperation = spy(cassandraOperation);
 
-        Map<String, Object> record = new HashMap<>();
-        record.put("name", "Test User");
-        record.put("email", "test@example.com");
-        List<Map<String, Object>> expectedResponse = Collections.singletonList(record);
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put("name", "Test User");
+        recordObj.put("email", "test@example.com");
+        List<Map<String, Object>> expectedResponse = Collections.singletonList(recordObj);
 
         Select mockSelect = mock(Select.class);
         SimpleStatement mockStatement = mock(SimpleStatement.class);
@@ -271,10 +272,10 @@ public class CassandraOperationImplTest {
         List<String> fields = Arrays.asList("name", "email");
         Integer limit = 10;
 
-        Map<String, Object> record = new HashMap<>();
-        record.put("name", "Test User");
-        record.put("email", "test@example.com");
-        List<Map<String, Object>> expectedResponse = Collections.singletonList(record);
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put("name", "Test User");
+        recordObj.put("email", "test@example.com");
+        List<Map<String, Object>> expectedResponse = Collections.singletonList(recordObj);
 
         Select mockSelect = mock(Select.class);
         when(mockSelect.limit(limit)).thenReturn(mockSelect);
@@ -319,10 +320,10 @@ public class CassandraOperationImplTest {
         List<String> fields = Arrays.asList("name", "email");
         Integer limit = null;
 
-        Map<String, Object> record = new HashMap<>();
-        record.put("name", "Test User");
-        record.put("email", "test@example.com");
-        List<Map<String, Object>> expectedResponse = Collections.singletonList(record);
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put("name", "Test User");
+        recordObj.put("email", "test@example.com");
+        List<Map<String, Object>> expectedResponse = Collections.singletonList(recordObj);
 
         Select mockSelect = mock(Select.class);
         when(mockSelect.toString()).thenReturn("SELECT name,email FROM test_keyspace.test_table WHERE id = '123'");
@@ -534,9 +535,6 @@ public class CassandraOperationImplTest {
 
     @Test
     public void testInsertBulkRecordSuccess() {
-        String keyspace = "test_ks";
-        String table = "test_table";
-
         when(connectionManager.getSession(keyspace)).thenReturn(session);
         when(session.prepare(anyString())).thenReturn(preparedStatement);
         when(preparedStatement.bind(Mockito.any())).thenReturn(boundStatement);
@@ -556,9 +554,6 @@ public class CassandraOperationImplTest {
 
     @Test
     public void testInsertBulkRecordException() {
-        String keyspace = "test_ks";
-        String table = "test_table";
-
         when(connectionManager.getSession(keyspace)).thenThrow(new RuntimeException("DB error"));
 
         Object result = cassandraOperation.insertBulkRecord(keyspace, table, requestList);
@@ -607,8 +602,6 @@ public class CassandraOperationImplTest {
     @Test
     public void testUpdateRecord_WhenUnknownIdentifierExceptionThrown_ShouldReturnFailureResponse() {
         // Arrange
-        String keyspace = "test_keyspace";
-        String table = "test_table";
         Map<String, Object> request = new HashMap<>();
         request.put("name", "John");
         request.put("email", "john@example.com");

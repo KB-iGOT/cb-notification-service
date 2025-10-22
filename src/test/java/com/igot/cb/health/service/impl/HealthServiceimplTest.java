@@ -22,9 +22,6 @@ class HealthServiceImplTest {
     @Mock
     private CassandraOperation cassandraOperation;
 
-    @Mock
-    private ApiResponse response;
-
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -37,12 +34,12 @@ class HealthServiceImplTest {
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
-        ApiResponse response = healthService.checkHealthStatus();
+        ApiResponse statusResp = healthService.checkHealthStatus();
 
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        assertTrue((Boolean) response.get(Constants.HEALTHY));
+        assertEquals(HttpStatus.OK, statusResp.getResponseCode());
+        assertTrue((Boolean) statusResp.get(Constants.HEALTHY));
 
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) statusResp.get(Constants.CHECKS);
         assertNotNull(checks);
         assertFalse(checks.isEmpty());
         Map<String, Object> cassandraCheck = checks.get(0);
@@ -58,12 +55,12 @@ class HealthServiceImplTest {
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
-        ApiResponse response = healthService.checkHealthStatus();
+        ApiResponse statusResp = healthService.checkHealthStatus();
 
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
+        assertEquals(HttpStatus.OK, statusResp.getResponseCode());
+        assertFalse((Boolean) statusResp.get(Constants.HEALTHY));
 
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) statusResp.get(Constants.CHECKS);
         assertNotNull(checks);
         assertFalse(checks.isEmpty());
         Map<String, Object> cassandraCheck = checks.get(0);
@@ -77,12 +74,12 @@ class HealthServiceImplTest {
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenThrow(new RuntimeException("Cassandra error"));
 
-        ApiResponse response = healthService.checkHealthStatus();
+        ApiResponse statusResp = healthService.checkHealthStatus();
 
-        assertEquals(HttpStatus.OK, response.getResponseCode());
-        assertFalse((Boolean) response.get(Constants.HEALTHY));
+        assertEquals(HttpStatus.OK, statusResp.getResponseCode());
+        assertFalse((Boolean) statusResp.get(Constants.HEALTHY));
 
-        List<Map<String, Object>> checks = (List<Map<String, Object>>) response.get(Constants.CHECKS);
+        List<Map<String, Object>> checks = (List<Map<String, Object>>) statusResp.get(Constants.CHECKS);
         assertNotNull(checks);
         assertFalse(checks.isEmpty());
         Map<String, Object> cassandraCheck = checks.get(0);
@@ -99,12 +96,12 @@ class HealthServiceImplTest {
         doThrow(new RuntimeException("Simulated failure")).when(spyService).cassandraHealthStatus(any(ApiResponse.class));
 
         // Invoke the method
-        ApiResponse response = spyService.checkHealthStatus();
+        ApiResponse statusResp = spyService.checkHealthStatus();
 
         // Assert response is marked as failed
-        assertEquals(Constants.FAILED, response.getParams().getStatus());
-        assertEquals("Simulated failure", response.getParams().getErr());
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+        assertEquals(Constants.FAILED, statusResp.getParams().getStatus());
+        assertEquals("Simulated failure", statusResp.getParams().getErr());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, statusResp.getResponseCode());
     }
 
 }

@@ -129,15 +129,15 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
                         .build();
             }
 
-            logger.info("Connected to the keyspaces: " + keySpaceName);
+            logger.info("Connected to the keyspaces: {}", keySpaceName);
 
             // Get metadata and log cluster information
             final Metadata metadata = sessionWithKeyspaces.getMetadata();
-            logger.info(String.format("Connected to cluster: %s", metadata.getClusterName()));
+            logger.info("Connected to cluster: {}", metadata.getClusterName());
 
             // Log nodes in the cluster
             for (Node host : metadata.getNodes().values()) {
-                logger.info(String.format("Datacenter: %s; Host: %s; Rack: %s", host.getDatacenter(), host.getEndPoint(), host.getRack()));
+                logger.info("Datacenter: {}; Host: {}; Rack: {}", host.getDatacenter(), host.getEndPoint(), host.getRack());
             }
 
             return sessionWithKeyspaces;
@@ -170,7 +170,7 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
      */
     public static ConsistencyLevel getConsistencyLevel() {
         String consistency = PropertiesCache.getInstance().readProperty(Constants.SUNBIRD_CASSANDRA_CONSISTENCY_LEVEL);
-        logger.info("CassandraConnectionManagerImpl:getConsistencyLevel: level = " + consistency);
+        logger.info("CassandraConnectionManagerImpl:getConsistencyLevel: level = {}", consistency);
 
         if (StringUtils.isBlank(consistency)) {
             logger.warn("Consistency level not configured, defaulting to LOCAL_QUORUM");

@@ -25,7 +25,6 @@ public class SunbirdConfigTest {
     private SunbirdConfig sunbirdConfig;
     private CqlSession mockSession;
     private CqlSessionBuilder mockBuilder;
-    private CassandraConverter mockConverter;
 
     @Before
     public void setup() {
@@ -42,7 +41,6 @@ public class SunbirdConfigTest {
         };
         mockSession = mock(CqlSession.class);
         mockBuilder = mock(CqlSessionBuilder.class);
-        mockConverter = mock(CassandraConverter.class);
         ReflectionTestUtils.setField(sunbirdConfig, "contactPoints", "localhost");
         ReflectionTestUtils.setField(sunbirdConfig, "port", 9042);
         ReflectionTestUtils.setField(sunbirdConfig, "keyspaceName", "test_keyspace");

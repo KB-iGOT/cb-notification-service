@@ -16,7 +16,7 @@ public interface NotificationService {
 
     ApiResponse readByUserIdAndNotificationId(String notificationId, String token);
 
-    ApiResponse getNotificationsByUserIdAndLastXDays(String token, int days, int page, int size, NotificationReadStatus status, String sub_type);
+    ApiResponse getNotificationsByUserIdAndLastXDays(String token, int days, int page, int size, NotificationReadStatus status, String subType);
 
     ApiResponse markNotificationsAsRead(String token, Map<String, Object> request);
 

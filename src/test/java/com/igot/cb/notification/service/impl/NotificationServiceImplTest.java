@@ -860,10 +860,10 @@ class NotificationServiceImplTest {
     void testGetUnreadNotificationCount_success_withExistingRecord() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
 
-        Map<String, Object> record = Map.of(Constants.COUNT, 10);
+        Map<String, Object> recordObj = Map.of(Constants.COUNT, 10);
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 anyString(), anyString(), anyMap(), anyList(), eq(1)))
-                .thenReturn(List.of(record));
+                .thenReturn(List.of(recordObj));
 
         ApiResponse response = notificationService.getUnreadNotificationCount(AUTH_TOKEN, 5);
 
@@ -1305,12 +1305,12 @@ class NotificationServiceImplTest {
         String userId = "u123";
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
 
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.COUNT, "not-a-number"); // invalid type
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put(Constants.COUNT, "not-a-number"); // invalid type
 
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
-                .thenReturn(List.of(record));
+                .thenReturn(List.of(recordObj));
 
         ApiResponse response = notificationService.getUnreadNotificationCount(authToken, 7);
         Map<String, Object> result = (Map<String, Object>) response.getResult();
@@ -1324,13 +1324,13 @@ class NotificationServiceImplTest {
         String userId = "u123";
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
 
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.COUNT, 5);
-        record.put(Constants.UPDATED_AT, null);
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put(Constants.COUNT, 5);
+        recordObj.put(Constants.UPDATED_AT, null);
 
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
-                .thenReturn(List.of(record));
+                .thenReturn(List.of(recordObj));
 
         ApiResponse response = notificationService.getUnreadNotificationCount(authToken, 7);
         Map<String, Object> result = (Map<String, Object>) response.getResult();
@@ -1345,13 +1345,13 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
 
         Instant lastUpdated = Instant.now();
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.COUNT, 2);
-        record.put(Constants.UPDATED_AT, lastUpdated);
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put(Constants.COUNT, 2);
+        recordObj.put(Constants.UPDATED_AT, lastUpdated);
 
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
-                .thenReturn(List.of(record));
+                .thenReturn(List.of(recordObj));
         when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(Collections.emptyList());
@@ -1765,10 +1765,10 @@ class NotificationServiceImplTest {
 
     @Test
     void testPrepareNotificationResponse_MessageParseFails() {
-        Map<String, Object> record = new HashMap<>();
-        record.put("message", "{invalidJson"); // invalid JSON
+        Map<String, Object> recordObj = new HashMap<>();
+        recordObj.put("message", "{invalidJson"); // invalid JSON
 
-        Map<String, Object> result = notificationService.prepareNotificationResponse(record);
+        Map<String, Object> result = notificationService.prepareNotificationResponse(recordObj);
 
         assertTrue(result.containsKey("message"));
     }

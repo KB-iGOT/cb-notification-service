@@ -23,7 +23,6 @@ class ConsumerTest {
     @BeforeEach
     void setup() {
         MockitoAnnotations.openMocks(this);
-        // No logger mocking needed; do not set static final logger field.
     }
 
 
@@ -53,7 +52,6 @@ class ConsumerTest {
     @Test
     void testConsume_serviceThrowsException_logsError() throws Exception {
         String message = "{ \"request\": { \"user_ids\": [{\"user_id\": \"user1\"}] } }";
-        JsonNode jsonNode = objectMapper.readTree(message);
 
         Consumer spyConsumer = Mockito.spy(consumer);
         ReflectionTestUtils.setField(spyConsumer, "objectMapper", objectMapper);

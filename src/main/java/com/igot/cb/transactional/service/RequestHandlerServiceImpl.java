@@ -57,13 +57,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
+                log.debug("Exception in parsing error response: {}", e1.getMessage());
             }
-            log.error("Error received: " + hce.getResponseBodyAsString(), hce);
+            log.error("Error received: {}", hce.getResponseBodyAsString(), hce);
         } catch (JsonProcessingException e) {
-            log.error(String.valueOf(e));
+            log.error("Error processing JSON: {}", e.getMessage(), e);
             try {
-                log.warn("Error Response: " + mapper.writeValueAsString(response));
+                log.warn("Error Response: {}", mapper.writeValueAsString(response));
             } catch (Exception e1) {
+                log.debug("Exception in parsing error response: {}", e1.getMessage());
             }
         }
         return response;
@@ -92,13 +94,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
+                log.debug("Exception in parsing error response: {}", e1.getMessage());
             }
-            log.error("Error received: " + e.getResponseBodyAsString(), e);
+            log.error("Error received: {}", e.getResponseBodyAsString(), e);
         } catch (Exception e) {
-            log.error(String.valueOf(e));
+            log.error("Error processing JSON: {}", e.getMessage(), e);
             try {
-                log.warn("Error Response: " + mapper.writeValueAsString(response));
+                log.warn("Error Response: {}", mapper.writeValueAsString(response));
             } catch (Exception e1) {
+                log.debug("Exception in parsing error response: {}", e1.getMessage());
             }
         }
         return response;

@@ -7,31 +7,19 @@ import java.security.PublicKey;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.junit.Assert.*;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.Mockito.*;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Stream;
-
-import static org.mockito.ArgumentMatchers.any;
-
-import com.igot.cb.util.Constants;
 import com.igot.cb.util.PropertiesCache;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 @RunWith(MockitoJUnitRunner.class)
 public class KeyManagerTest {
-
-    private static final Logger logger = LoggerFactory.getLogger(KeyManagerTest.class.getName());
 
     @Test
     public void testLoadPublicKeyWithInvalidKeyString() {
