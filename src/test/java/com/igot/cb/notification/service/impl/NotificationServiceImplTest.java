@@ -3,8 +3,6 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
@@ -26,7 +24,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.igot.cb.util.Constants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -151,7 +148,7 @@ class NotificationServiceImplTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
         assertEquals(Constants.FAILED, response.getParams().getStatus());
-        assertEquals("Missing or invalid 'request' node in payload", response.getParams().getErrMsg());
+        assertEquals(Constants.MISSING_OR_INVALID_REQUEST_NODE, response.getParams().getErrMsg());
     }
 
     @Test
@@ -299,7 +296,7 @@ class NotificationServiceImplTest {
         ApiResponse response = notificationService.bulkCreateNotifications(userNotificationDetail);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
-        assertEquals("Missing or invalid 'request' node in payload", response.getParams().getErrMsg());
+        assertEquals(Constants.MISSING_OR_INVALID_REQUEST_NODE, response.getParams().getErrMsg());
         assertEquals(Constants.FAILED, response.getParams().getStatus());
     }
 

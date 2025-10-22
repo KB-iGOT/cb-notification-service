@@ -68,7 +68,7 @@ public class NotificationServiceImpl implements NotificationService {
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
                 log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
-                updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
+                updateErrorDetails(outgoingResponse, Constants.MISSING_OR_INVALID_REQUEST_NODE, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
 
@@ -114,7 +114,7 @@ public class NotificationServiceImpl implements NotificationService {
                 }
             } else {
                 log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
-                outgoingResponse.getParams().setErrMsg("Missing or invalid 'request' node in payload");
+                outgoingResponse.getParams().setErrMsg(Constants.MISSING_OR_INVALID_REQUEST_NODE);
                 outgoingResponse.getParams().setStatus(Constants.FAILED);
                 outgoingResponse.setResponseCode(HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
@@ -155,7 +155,7 @@ public class NotificationServiceImpl implements NotificationService {
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
                 log.warn(Constants.MISSING_OR_INVALID_REQUEST_NODE + "{}", userNotificationDetail.toString());
-                updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
+                updateErrorDetails(outgoingResponse, Constants.MISSING_OR_INVALID_REQUEST_NODE, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
 
@@ -682,8 +682,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         String action = (String) request.get(ACTION);
 
-        try {
-            List<Map<String, Object>> userNotifications = new ArrayList<>();
+        try {            
             List<String> notificationIds;
             List<Map<String, Object>> insertedAndMarked = new ArrayList<>();
 
@@ -701,11 +700,10 @@ public class NotificationServiceImpl implements NotificationService {
                 }else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
                     notificationIds = extractIndividualNotificationIds(request, response);
-                    if (notificationIds == null) return response;
+                    if (CollectionUtils.isEmpty(notificationIds)) return response;
                     List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
                     List<Map<String, Object>> targetGlobals = globalNotifications.stream()
-                            .filter(n -> notificationIds.contains(n.get(NOTIFICATION_ID)))
-                            .collect(Collectors.toList());
+                            .filter(n -> notificationIds.contains(n.get(NOTIFICATION_ID))).toList();
 
                     if (targetGlobals.isEmpty()) {
                         updateErrorDetails(response, "No matching global notifications found for provided IDs", HttpStatus.NOT_FOUND);
@@ -725,16 +723,15 @@ public class NotificationServiceImpl implements NotificationService {
                 }
             }
 
-            userNotifications = fetchNotifications(userId);
+            List<Map<String, Object>> userNotifications = fetchNotifications(userId);
             if (ALL.equalsIgnoreCase(type)) {
                 notificationIds = userNotifications.stream()
-                        .map(n -> (String) n.get(NOTIFICATION_ID))
-                        .collect(Collectors.toList());
+                        .map(n -> (String) n.get(NOTIFICATION_ID)).toList();
                 List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
                 insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
             } else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                 notificationIds = extractIndividualNotificationIds(request, response);
-                if (notificationIds == null) return response;
+                if (CollectionUtils.isEmpty(notificationIds)) return response;
             } else {
                 updateErrorDetails(response, "Invalid type. Allowed values: all, individual", HttpStatus.BAD_REQUEST);
                 return response;
@@ -763,7 +760,7 @@ public class NotificationServiceImpl implements NotificationService {
             return (List<String>) idsObj;
         } else {
             updateErrorDetails(response, "Missing or invalid 'ids' field for individual type", HttpStatus.BAD_REQUEST);
-            return null;
+            return Collections.emptyList();
         }
     }
 
@@ -961,12 +958,12 @@ public class NotificationServiceImpl implements NotificationService {
             );
 
             if (countRecords != null && !countRecords.isEmpty()) {
-                Map<String, Object> record = countRecords.get(0);
-                if (record != null) {
-                    Object countObj = record.get(COUNT);
+                Map<String, Object> notificationCountRecord = countRecords.get(0);
+                if (notificationCountRecord != null) {
+                    Object countObj = notificationCountRecord.get(COUNT);
                     if (countObj instanceof Number) {
                         unreadCount = ((Number) countObj).intValue();
-                        Instant lastUpdated = record.get(UPDATED_AT) instanceof Instant ? (Instant) record.get(UPDATED_AT) : null;
+                        Instant lastUpdated = notificationCountRecord.get(UPDATED_AT) instanceof Instant ? (Instant) notificationCountRecord.get(UPDATED_AT) : null;
                         if (lastUpdated != null ) {
                             int globalNotificationCount = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_COUNT).stream()
                                     .filter(n -> n.get(CREATED_AT) instanceof Instant && ((Instant)n.get(CREATED_AT)).isAfter(lastUpdated))
