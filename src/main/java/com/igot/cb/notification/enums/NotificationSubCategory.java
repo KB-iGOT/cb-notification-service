@@ -94,7 +94,8 @@ public enum NotificationSubCategory {
     TRANSFER_UPDATE(false),
     PROFILE_UPDATE(false),
     PROFANITY_CHECK(false),
-    DELETED_BATCH(false);
+    DELETED_BATCH(false),
+    BP_ASSIGNMENT(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
