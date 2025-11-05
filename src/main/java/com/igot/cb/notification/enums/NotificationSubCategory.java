@@ -97,7 +97,8 @@ public enum NotificationSubCategory {
     DELETED_BATCH(false),
     BP_ASSIGNMENT_UPLOAD(false),
     BP_ASSIGNMENT_EVALUATE(false),
-    BP_ASSIGNMENT_SUBMIT(false);
+    BP_ASSIGNMENT_SUBMIT(false),
+    INSTRUCTOR_ADD_BATCH(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
