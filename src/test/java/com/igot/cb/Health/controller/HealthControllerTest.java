@@ -1,10 +1,7 @@
-package com.igot.cb.Health.controller;
+package com.igot.cb.health.controller;
 
-import com.igot.cb.health.controller.HealthController;
 import com.igot.cb.health.service.HealthService;
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.util.ApiResponse;
-import com.igot.cb.util.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
