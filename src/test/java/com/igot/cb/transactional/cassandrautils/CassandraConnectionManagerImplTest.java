@@ -144,9 +144,11 @@ class CassandraConnectionManagerImplTest {
     void testResourceCleanUp_closesSessions() throws Exception {
         CqlSession mockSession1 = mock(CqlSession.class);
         CqlSession mockSession2 = mock(CqlSession.class);
+        when(mockSession1.isClosed()).thenReturn(false);
+        when(mockSession2.isClosed()).thenReturn(false);
 
         getCassandraSessionMap().put("ks1", mockSession1);
-        setStaticSession(mockSession2);
+        getCassandraSessionMap().put("__DEFAULT__", mockSession2);
 
         CassandraConnectionManagerImpl.ResourceCleanUp cleanup = new CassandraConnectionManagerImpl.ResourceCleanUp();
         cleanup.run();
@@ -176,10 +178,9 @@ class CassandraConnectionManagerImplTest {
 
     @Test
     void testResourceCleanUp_noSessionsDoesNotThrow() {
-        // Clear map and static session
+        // Clear map (no static session anymore)
         try {
             getCassandraSessionMap().clear();
-            setStaticSession(null);
         } catch (Exception e) {
             fail(e);
         }
@@ -195,11 +196,6 @@ class CassandraConnectionManagerImplTest {
         return (Map<String, CqlSession>) field.get(null);
     }
 
-    private void setStaticSession(CqlSession session) throws Exception {
-        Field field = CassandraConnectionManagerImpl.class.getDeclaredField("session");
-        field.setAccessible(true);
-        field.set(null, session);
-    }
 
     @Test
     void testGetConsistencyLevel_propertyMissing_defaultsToLocalQuorum() {

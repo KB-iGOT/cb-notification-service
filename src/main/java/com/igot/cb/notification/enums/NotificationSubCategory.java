@@ -1,6 +1,8 @@
 package com.igot.cb.notification.enums;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.igot.cb.util.Constants;
+
 import lombok.Getter;
 
 import java.time.Duration;
@@ -25,7 +27,7 @@ public enum NotificationSubCategory {
 
         @Override
         public String clubKey(JsonNode data) {
-            return data.get("discussionId").asText();
+            return data.get(Constants.DISCUSSION_ID).asText();
         }
     },
     LIKED_COMMENT(true) {

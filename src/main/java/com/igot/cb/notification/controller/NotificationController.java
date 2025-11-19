@@ -44,7 +44,7 @@ public class NotificationController {
 
 
     @GetMapping("/list")
-    public ResponseEntity<?> getLastXDaysNotifications(
+    public ResponseEntity<ApiResponse> getLastXDaysNotifications(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_DAYS + "") int days,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_PAGE + "") int page,
@@ -58,7 +58,7 @@ public class NotificationController {
 
 
     @PatchMapping("/read")
-    public ResponseEntity<?> markNotificationsAsRead(
+    public ResponseEntity<ApiResponse> markNotificationsAsRead(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestBody Map<String, Object> requestBody) {
 
@@ -69,7 +69,7 @@ public class NotificationController {
 
 
     @DeleteMapping("/delete")
-    public ResponseEntity<?> markNotificationsAsDeleted(
+    public ResponseEntity<ApiResponse> markNotificationsAsDeleted(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestBody Map<String, Object> requestBody) {
 
@@ -79,7 +79,7 @@ public class NotificationController {
     }
 
     @GetMapping("/unread/count")
-    public ResponseEntity<?> getUnreadNotificationCount(
+    public ResponseEntity<ApiResponse> getUnreadNotificationCount(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_DAYS + "") int days) {
 
@@ -88,7 +88,7 @@ public class NotificationController {
     }
 
     @GetMapping("/reset/unread/count")
-    public ResponseEntity<?> getResetNotificationCount(
+    public ResponseEntity<ApiResponse> getResetNotificationCount(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
 
         ApiResponse response = notificationService.getResetNotificationCount(token);

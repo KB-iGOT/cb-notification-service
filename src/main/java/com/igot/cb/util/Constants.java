@@ -465,6 +465,16 @@ public class Constants {
     public static final String ACTION = "action";
     public static final int MAX_NOTIFICATIONS_FETCH_FOR_COUNT = 10;
 
+    public static final String UNAUTHORIZED_USER_MSG = "You are not authorized.";
+    public static final String INTERNAL_ERROR_MSG = "Process failed,please try again later.";
+
+    public static final String UNAUTHORIZED_USER_KEY = "UNAUTHORIZED_USER";
+    public static final String INTERNAL_ERROR_KEY = "INTERNAL_ERROR";
+    public static final String DISCUSSION_ID = "discussionId";
+    public static final String DATA_CENTER_DEFAULT_VALUE = "datacenter1";
+    public static final String INVALID_PAYLOAD_ERR_MSG = "Missing or invalid 'request' node in payload";
+    public static final String INVALID_REQUEST_ERR_MSG = "Missing or invalid 'request' node: {}";
+
     private Constants() {
     }
 }

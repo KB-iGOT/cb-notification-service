@@ -67,8 +67,8 @@ public class NotificationServiceImpl implements NotificationService {
 
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
-                updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
+                log.warn(Constants.INVALID_REQUEST_ERR_MSG, userNotificationDetail.toString());
+                updateErrorDetails(outgoingResponse, Constants.INVALID_PAYLOAD_ERR_MSG, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
 
@@ -113,8 +113,8 @@ public class NotificationServiceImpl implements NotificationService {
                     }
                 }
             } else {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
-                outgoingResponse.getParams().setErrMsg("Missing or invalid 'request' node in payload");
+                log.warn(Constants.INVALID_REQUEST_ERR_MSG, userNotificationDetail.toString());
+                outgoingResponse.getParams().setErrMsg(Constants.INVALID_PAYLOAD_ERR_MSG);
                 outgoingResponse.getParams().setStatus(Constants.FAILED);
                 outgoingResponse.setResponseCode(HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
@@ -154,8 +154,8 @@ public class NotificationServiceImpl implements NotificationService {
         try {
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
             if (ObjectUtils.isEmpty(requestNode) || !requestNode.isObject()) {
-                log.warn("Missing or invalid 'request' node: {}", userNotificationDetail.toString());
-                updateErrorDetails(outgoingResponse, "Missing or invalid 'request' node in payload", HttpStatus.BAD_REQUEST);
+                log.warn(Constants.INVALID_REQUEST_ERR_MSG, userNotificationDetail.toString());
+                updateErrorDetails(outgoingResponse, Constants.INVALID_PAYLOAD_ERR_MSG, HttpStatus.BAD_REQUEST);
                 return outgoingResponse;
             }
 

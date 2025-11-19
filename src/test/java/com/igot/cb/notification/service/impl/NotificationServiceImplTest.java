@@ -40,7 +40,6 @@ class NotificationServiceImplTest {
     private AccessTokenValidator accessTokenValidator;
     private static final String NOTIFICATION_ID_1 = "notification-id-1";
     private static final String NOTIFICATION_ID_2 = "notification-id-2";
-    private static final String userId = "user-123";
 
     @Mock
     private CassandraOperation cassandraOperation;

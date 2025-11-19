@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public class CassandraConnectionManagerImpl implements CassandraConnectionManager {
     private static final Logger logger = LoggerFactory.getLogger(CassandraConnectionManagerImpl.class);
     private static final Map<String, CqlSession> cassandraSessionMap = new ConcurrentHashMap<>(2);
-    private static CqlSession session;
+    private static final String DEFAULT_SESSION_KEY = "__DEFAULT__";
 
     /**
      * Method invoked after bean creation for initialization
@@ -99,7 +99,7 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             DriverConfigLoader loader = DriverConfigLoader.programmaticBuilder()
                     .withStringList(DefaultDriverOption.CONTACT_POINTS, contactPointsString)
                     .withString(DefaultDriverOption.REQUEST_CONSISTENCY, consistencyLevel.name())
-                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, "datacenter1")
+                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, Constants.DATA_CENTER_DEFAULT_VALUE)
                     .withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE,
                             Integer.parseInt(cache.getProperty(Constants.CORE_CONNECTIONS_PER_HOST_FOR_LOCAL)))
                     .withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE,
@@ -117,14 +117,14 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             if (StringUtils.isNotBlank(keySpaceName)) {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(Constants.DATA_CENTER_DEFAULT_VALUE)
                         .withKeyspace(keySpaceName)
                         .withConfigLoader(loader)
                         .build();
             } else {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(Constants.DATA_CENTER_DEFAULT_VALUE)
                         .withConfigLoader(loader)
                         .build();
             }
@@ -153,7 +153,8 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
 
     public void createCassandraConnection() {
         try {
-            session = createCassandraConnectionWithKeySpaces(null);
+            CqlSession defaultSession = createCassandraConnectionWithKeySpaces(null);
+            cassandraSessionMap.put(DEFAULT_SESSION_KEY, defaultSession);
         } catch (Exception e) {
             logger.error("Error while creating Cassandra connection", e);
             throw new CustomException(
@@ -206,10 +207,10 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             try {
                 logger.info("Started resource cleanup for Cassandra.");
                 for (Map.Entry<String, CqlSession> entry : cassandraSessionMap.entrySet()) {
-                    entry.getValue().close();
-                }
-                if (session != null) {
-                    session.close();
+                    if (entry.getValue() != null && !entry.getValue().isClosed()) {
+                        entry.getValue().close();
+                        logger.info("Closed Cassandra session for keyspace: {}", entry.getKey());
+                    }
                 }
                 logger.info("Completed resource cleanup for Cassandra.");
             } catch (Exception ex) {
