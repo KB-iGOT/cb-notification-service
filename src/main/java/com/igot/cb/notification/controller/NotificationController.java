@@ -3,8 +3,9 @@ package com.igot.cb.notification.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.service.NotificationService;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

@@ -1,7 +1,8 @@
 package com.igot.cb.userNotificationSetting.service;
 
+import org.igot.common.ApiResponse;
+
 import com.fasterxml.jackson.databind.JsonNode;
-import com.igot.cb.util.ApiResponse;
 
 public interface UserNotificationSettingService {
 

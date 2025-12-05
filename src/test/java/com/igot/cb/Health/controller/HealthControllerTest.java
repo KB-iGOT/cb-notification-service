@@ -1,7 +1,6 @@
 package com.igot.cb.health.controller;
 
 import com.igot.cb.health.service.HealthService;
-import com.igot.cb.util.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -12,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+
+import org.igot.common.ApiResponse;
 
 class HealthControllerTest {
 

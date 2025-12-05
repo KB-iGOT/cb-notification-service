@@ -7,19 +7,18 @@ import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.service.NotificationService;
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
 import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
 import com.igot.cb.userNotificationSetting.enums.NotificationType;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import com.igot.cb.util.ProjectUtil;
 import io.micrometer.common.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.ObjectUtils;
+import org.igot.common.ApiResponse;
 import org.igot.common.auth.AccessTokenValidator;
+import org.igot.common.cassandra.CassandraOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +55,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public ApiResponse createNotification(JsonNode userNotificationDetail, String authToken) {
         log.info("NotificationService::createNotification: inside the method");
-        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_CREATE);
+        ApiResponse outgoingResponse = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_CREATE);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -149,7 +148,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public ApiResponse bulkCreateNotifications(JsonNode userNotificationDetail) {
         log.info("NotificationService::bulkCreateNotification: Bulk notification creation started");
-        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_BULK_CREATE);
+        ApiResponse outgoingResponse = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_BULK_CREATE);
 
         try {
             JsonNode requestNode = userNotificationDetail.get(Constants.REQUEST);
@@ -298,7 +297,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     public ApiResponse createGlobalNotification(NotificationSubCategory subCategory, JsonNode requestNode) {
         log.info("Detected global notification for subCategory '{}'", subCategory);
-        ApiResponse response = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_BULK_CREATE);
+        ApiResponse response = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_BULK_CREATE);
 
         try {
             Instant now = LocalDateTime.now().atZone(ZoneId.of(UTC)).toInstant();
@@ -353,7 +352,7 @@ public class NotificationServiceImpl implements NotificationService {
     @SneakyThrows
     private void clubNotification(NotificationSubCategory notificationSubCategory, String userId, JsonNode requestNode) {
         Duration clubWindow = notificationSubCategory.clubWindow();
-        List<Map<String, Object>> dbRecords = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        List<Map<String, Object>> dbRecords = cassandraOperation.getRecordsByProperties(
                 KEYSPACE_SUNBIRD,
                 TABLE_USER_NOTIFICATION,
                 Map.of(USER_ID, userId),
@@ -376,7 +375,7 @@ public class NotificationServiceImpl implements NotificationService {
                     && dbNotificationUserId.equals(userId)
                     && dbNotificationClubKey.equals(clubKey)) {
                 dbNotificationMessage = updateNotificationMessage(notificationSubCategory, dbNotificationMessage);
-                cassandraOperation.updateRecordByCompositeKey(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION,
+                cassandraOperation.updateRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION,
                         Map.of(MESSAGE, objectMapper.writeValueAsString(dbNotificationMessage)),
                         Map.of(
                                 USER_ID, userId,
@@ -437,7 +436,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public ApiResponse readByUserIdAndNotificationId(String notificationId, String authToken) {
         log.info("NotificationService::readByUserIdAndNotificationId: inside the method");
-        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_NOTIFICATIONID);
+        ApiResponse outgoingResponse = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_READ_NOTIFICATIONID);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -478,7 +477,7 @@ public class NotificationServiceImpl implements NotificationService {
             NotificationReadStatus status, String subTypeFilter) {
 
         log.info("NotificationService::getNotificationsByUserIdAndLastXDays - start");
-        ApiResponse response = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_N_DAYSID);
+        ApiResponse response = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_READ_N_DAYSID);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -509,7 +508,7 @@ public class NotificationServiceImpl implements NotificationService {
 
             Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
 
-            List<Map<String, Object>> userNotifications = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> userNotifications = cassandraOperation.getRecordsByProperties(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_USER_NOTIFICATION,
                     Map.of(USER_ID, userId),
@@ -517,7 +516,7 @@ public class NotificationServiceImpl implements NotificationService {
                     MAX_NOTIFICATIONS_FETCH_FOR_READ
             );
 
-            List<Map<String, Object>> globalNotifications = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> globalNotifications = cassandraOperation.getRecordsByProperties(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_GLOBAL_NOTIFICATION,
                     Map.of(USER_ID, GLOBAL),
@@ -666,7 +665,7 @@ public class NotificationServiceImpl implements NotificationService {
     public ApiResponse markNotificationsAsRead(String authToken, Map<String, Object> request) {
         log.info("NotificationService::markNotificationsAsRead - Incoming request: {}", request);
 
-        ApiResponse response = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_UPDATEID);
+        ApiResponse response = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_READ_UPDATEID);
         String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
 
         if (StringUtils.isEmpty(userId)) {
@@ -815,7 +814,7 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     private List<Map<String, Object>> fetchGlobalNotifications(int limit) {
-        return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        return cassandraOperation.getRecordsByProperties(
                 Constants.KEYSPACE_SUNBIRD,
                 Constants.TABLE_GLOBAL_NOTIFICATION,
                 Map.of(Constants.USER_ID, Constants.GLOBAL),
@@ -827,7 +826,7 @@ public class NotificationServiceImpl implements NotificationService {
     private List<Map<String, Object>> insertAndMarkGlobalNotificationsAsRead(
             String userId, List<Map<String, Object>> globalNotifs) {
 
-        List<Map<String, Object>> existingUserNotifs = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        List<Map<String, Object>> existingUserNotifs = cassandraOperation.getRecordsByProperties(
                 Constants.KEYSPACE_SUNBIRD,
                 Constants.TABLE_USER_NOTIFICATION,
                 Map.of(USER_ID, userId),
@@ -878,7 +877,7 @@ public class NotificationServiceImpl implements NotificationService {
     public ApiResponse markNotificationsAsDeleted(String authToken, List<String> notificationIds) {
         log.info("NotificationService::markNotificationsAsDeleted - ids: {}", notificationIds);
 
-        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_DELETE);
+        ApiResponse outgoingResponse = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_DELETE);
         List<Map<String, Object>> updated = new ArrayList<>();
 
         try {
@@ -933,7 +932,7 @@ public class NotificationServiceImpl implements NotificationService {
     public ApiResponse getUnreadNotificationCount(String authToken, int days) {
         log.info("NotificationService::getUnreadNotificationCount: inside the method");
 
-        ApiResponse outgoingResponse = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_UNREAD_COUNT);
+        ApiResponse outgoingResponse = ApiResponse.createDefaultResponse(USER_NOTIFICATION_UNREAD_COUNT);
 
         try {
 
@@ -952,7 +951,7 @@ public class NotificationServiceImpl implements NotificationService {
             int unreadCount = 0;
             Map<String, Object> criteria = Map.of(Constants.USER_ID, userId);
 
-            List<Map<String, Object>> countRecords = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> countRecords = cassandraOperation.getRecordsByProperties(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_UNREAD_NOTIFICATION_COUNT,
                     criteria,
@@ -1002,7 +1001,7 @@ public class NotificationServiceImpl implements NotificationService {
     public ApiResponse getResetNotificationCount(String authToken) {
         log.info("NotificationService::getResetNotificationCount - Start");
 
-        ApiResponse response = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_UNREAD_RESET_COUNT);
+        ApiResponse response = ApiResponse.createDefaultResponse(USER_NOTIFICATION_UNREAD_RESET_COUNT);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -1018,7 +1017,7 @@ public class NotificationServiceImpl implements NotificationService {
             updateAttributes.put(UPDATED_AT, Instant.now());
             Map<String, Object> compositeKey = Map.of(Constants.USER_ID, userId);
 
-            Map<String, Object> updateResponse = cassandraOperation.updateRecordByCompositeKey(
+            Map<String, Object> updateResponse = cassandraOperation.updateRecord(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_UNREAD_NOTIFICATION_COUNT,
                     updateAttributes,
@@ -1071,7 +1070,7 @@ public class NotificationServiceImpl implements NotificationService {
         Map<String, Object> queryMap = new HashMap<>();
         queryMap.put(USER_ID, userId);
 
-        return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        return cassandraOperation.getRecordsByProperties(
                 Constants.KEYSPACE_SUNBIRD,
                 Constants.TABLE_USER_NOTIFICATION,
                 queryMap,
@@ -1097,7 +1096,7 @@ public class NotificationServiceImpl implements NotificationService {
                     CREATED_AT, createdAt
             );
 
-            return cassandraOperation.updateRecordByCompositeKey(
+            return cassandraOperation.updateRecord(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_USER_NOTIFICATION,
                     updateMap,
@@ -1152,7 +1151,7 @@ public class NotificationServiceImpl implements NotificationService {
             whereClause.put(USER_ID, userId);
 
             List<String> fields = Collections.singletonList(COUNT);
-            List<Map<String, Object>> records = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> records = cassandraOperation.getRecordsByProperties(
                     keyspace, table, whereClause, fields, 1
             );
 
@@ -1167,7 +1166,7 @@ public class NotificationServiceImpl implements NotificationService {
             updateAttributes.put(COUNT, updatedCount);
             updateAttributes.put(UPDATED_AT, Instant.now());
 
-            cassandraOperation.updateRecordByCompositeKey(
+            cassandraOperation.updateRecord(
                     keyspace,
                     table,
                     updateAttributes,

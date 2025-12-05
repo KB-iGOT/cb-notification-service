@@ -3,8 +3,8 @@ package com.igot.cb.userNotificationSetting.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
-import com.igot.cb.util.ApiResponse;
-import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;

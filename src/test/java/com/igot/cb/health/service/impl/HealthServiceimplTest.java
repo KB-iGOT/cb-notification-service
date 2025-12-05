@@ -1,9 +1,10 @@
 package com.igot.cb.health.service.impl;
 
 import com.igot.cb.health.service.HealthServiceImpl;
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
+import org.igot.common.cassandra.CassandraOperation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -33,7 +34,7 @@ class HealthServiceImplTest {
     @Test
     void testCheckHealthStatus_Healthy() throws Exception {
         List<Map<String, Object>> cassandraResponse = List.of(Map.of("dummyKey", "dummyValue"));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
@@ -54,7 +55,7 @@ class HealthServiceImplTest {
     void testCheckHealthStatus_Unhealthy() throws Exception {
         // Mock Cassandra returns an empty list
         List<Map<String, Object>> cassandraResponse = Collections.emptyList();
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
@@ -73,7 +74,7 @@ class HealthServiceImplTest {
 
     @Test
     void testCheckHealthStatus_Exception() throws Exception {
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenThrow(new RuntimeException("Cassandra error"));
 

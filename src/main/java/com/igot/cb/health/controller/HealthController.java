@@ -1,7 +1,8 @@
 package com.igot.cb.health.controller;
 
 import com.igot.cb.health.service.HealthService;
-import com.igot.cb.util.ApiResponse;
+
+import org.igot.common.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

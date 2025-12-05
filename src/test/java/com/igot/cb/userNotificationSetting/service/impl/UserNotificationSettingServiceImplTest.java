@@ -6,9 +6,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.transactional.redis.cache.CacheService;
 import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
 
+import org.igot.common.ApiResponse;
 import org.igot.common.auth.AccessTokenValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

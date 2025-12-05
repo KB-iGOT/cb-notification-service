@@ -2,8 +2,9 @@ package com.igot.cb.userNotificationSetting.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

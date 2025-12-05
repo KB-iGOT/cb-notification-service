@@ -7,8 +7,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.notification.controller.NotificationController;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.service.NotificationService;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;

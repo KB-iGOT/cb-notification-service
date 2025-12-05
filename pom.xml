@@ -214,9 +214,9 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
-			<groupId>io.github.karthik-tarento</groupId>
+			<groupId>net.karmayogibharat</groupId>
 			<artifactId>common-util</artifactId>
-			<version>1.0.0</version>
+			<version>1.0.2</version>
 		</dependency>
 	</dependencies>
 

@@ -8,12 +8,11 @@ import com.igot.cb.userNotificationSetting.enums.NotificationType;
 import com.igot.cb.userNotificationSetting.dto.NotificationSettingRequest;
 import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
 import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import com.igot.cb.util.ProjectUtil;
 import io.micrometer.common.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
+import org.igot.common.ApiResponse;
 import org.igot.common.auth.AccessTokenValidator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -49,7 +48,7 @@ public class UserNotificationSettingServiceImpl implements UserNotificationSetti
     public ApiResponse upsertUserNotificationSetting(JsonNode userNotificationDetail, String authToken) {
         log.info("NotificationSettingService::upsertUserNotificationSetting - started");
 
-        ApiResponse response = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_SETTING_UPSERT);
+        ApiResponse response = ApiResponse.createDefaultResponse(USER_NOTIFICATION_SETTING_UPSERT);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -108,7 +107,7 @@ public class UserNotificationSettingServiceImpl implements UserNotificationSetti
     public ApiResponse getUserNotificationSettings(String authToken) {
         log.info("NotificationSettingService::getUserNotificationSettings - started");
 
-        ApiResponse response = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_SETTING_READ);
+        ApiResponse response = ApiResponse.createDefaultResponse(USER_NOTIFICATION_SETTING_READ);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
@@ -159,7 +158,7 @@ public class UserNotificationSettingServiceImpl implements UserNotificationSetti
     public ApiResponse deleteUserNotificationSetting(JsonNode userNotificationDetail, String authToken) {
         log.info("NotificationSettingService::deleteUserNotificationSetting - started");
 
-        ApiResponse response = ProjectUtil.createDefaultResponse(USER_NOTIFICATION_SETTING_DELETE);
+        ApiResponse response = ApiResponse.createDefaultResponse(USER_NOTIFICATION_SETTING_DELETE);
 
         try {
             String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);

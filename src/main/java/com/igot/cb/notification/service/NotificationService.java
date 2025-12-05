@@ -2,11 +2,11 @@ package com.igot.cb.notification.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.igot.cb.notification.enums.NotificationReadStatus;
-import com.igot.cb.util.ApiResponse;
-
 
 import java.util.List;
 import java.util.Map;
+
+import org.igot.common.ApiResponse;
 
 public interface NotificationService {
 

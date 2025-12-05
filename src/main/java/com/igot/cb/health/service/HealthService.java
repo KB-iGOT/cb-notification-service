@@ -1,7 +1,6 @@
 package com.igot.cb.health.service;
 
-
-import com.igot.cb.util.ApiResponse;
+import org.igot.common.ApiResponse;
 
 public interface HealthService {
 
