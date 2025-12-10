@@ -278,7 +278,7 @@ public class NotificationServiceImpl implements NotificationService {
                     .toList();
 
             outgoingResponse.setResponseCode(HttpStatus.OK);
-            outgoingResponse.setResult(Map.of("notifications", responseList));
+            outgoingResponse.setResult(Map.of(Constants.NOTIFICATIONS, responseList));
             log.info("NotificationService::bulkCreateNotification: Successfully inserted {} notifications", responseList.size());
 
         } catch (Exception e) {
@@ -695,7 +695,7 @@ public class NotificationServiceImpl implements NotificationService {
                     response.getParams().setErrMsg("Global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
-                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    response.setResult(Map.of(Constants.NOTIFICATIONS, insertedAndMarked));
                     return response;
                 }else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
@@ -715,7 +715,7 @@ public class NotificationServiceImpl implements NotificationService {
                     response.getParams().setErrMsg("Selected global notifications marked as read and inserted");
                     response.getParams().setStatus(Constants.SUCCESS);
                     response.setResponseCode(HttpStatus.OK);
-                    response.setResult(Map.of("notifications", insertedAndMarked));
+                    response.setResult(Map.of(Constants.NOTIFICATIONS, insertedAndMarked));
                     return response;
 
                 } else {
@@ -744,7 +744,7 @@ public class NotificationServiceImpl implements NotificationService {
             response.getParams().setErrMsg("Notifications updated successfully");
             response.getParams().setStatus(Constants.SUCCESS);
             response.setResponseCode(HttpStatus.OK);
-            response.setResult(Map.of("notifications", updated));
+            response.setResult(Map.of(Constants.NOTIFICATIONS, updated));
 
             log.info("Notifications marked as read successfully. Count: {}", updated.size());
         } catch (Exception e) {

@@ -38,7 +38,7 @@ public class NotificationController {
     }
 
     @GetMapping("/readby/{notificationId}")
-    public ResponseEntity<?> readByUserIdAndNotificationId(@PathVariable String notificationId, @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
+    public ResponseEntity<ApiResponse> readByUserIdAndNotificationId(@PathVariable String notificationId, @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
         ApiResponse response = notificationService.readByUserIdAndNotificationId(notificationId, token);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }

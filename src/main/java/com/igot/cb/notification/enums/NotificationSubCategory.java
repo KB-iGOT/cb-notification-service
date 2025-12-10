@@ -43,7 +43,7 @@ public enum NotificationSubCategory {
 
         @Override
         public String clubKey(JsonNode data) {
-            return data.get("discussionId").asText();
+            return data.get(Constants.DISCUSSION_ID).asText();
         }
     },
     REPLIED_POST(true) {
@@ -59,7 +59,7 @@ public enum NotificationSubCategory {
 
         @Override
         public String clubKey(JsonNode data) {
-            return data.get("discussionId").asText();
+            return data.get(Constants.DISCUSSION_ID).asText();
         }
     },
     POST_COMMENT(false),
@@ -75,7 +75,7 @@ public enum NotificationSubCategory {
 
         @Override
         public String clubKey(JsonNode data) {
-            return data.get("discussionId").asText();
+            return data.get(Constants.DISCUSSION_ID).asText();
         }
 
     },
