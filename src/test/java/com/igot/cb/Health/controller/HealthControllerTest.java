@@ -1,4 +1,4 @@
-package com.igot.cb.Health.controller;
+package com.igot.cb.health.controller;
 
 import com.igot.cb.health.controller.HealthController;
 import com.igot.cb.health.service.HealthService;
