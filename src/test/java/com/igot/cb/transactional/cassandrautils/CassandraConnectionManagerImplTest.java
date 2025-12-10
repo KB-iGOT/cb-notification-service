@@ -120,12 +120,20 @@ class CassandraConnectionManagerImplTest {
 
     @Test
     void testCreateCassandraConnectionWithKeySpaces_exception() {
-        CassandraConnectionManagerImpl manager = mock(
+        try (
+            MockedStatic<PropertiesCache> propertiesCacheStatic = Mockito.mockStatic(PropertiesCache.class)
+        ) {
+            PropertiesCache mockPropertiesCache = mock(PropertiesCache.class);
+            propertiesCacheStatic.when(PropertiesCache::getInstance).thenReturn(mockPropertiesCache);
+            when(mockPropertiesCache.getProperty(Constants.CASSANDRA_CONFIG_HOST)).thenReturn("");
+
+            CassandraConnectionManagerImpl manager = mock(
                 CassandraConnectionManagerImpl.class,
                 withSettings().defaultAnswer(CALLS_REAL_METHODS)
-        );
-        assertThrows(CustomException.class,
+            );
+            assertThrows(CustomException.class,
                 () -> manager.createCassandraConnectionWithKeySpaces(null));
+        }
     }
 
 
