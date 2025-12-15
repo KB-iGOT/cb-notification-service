@@ -5,7 +5,6 @@ import com.igot.cb.userNotificationSetting.service.UserNotificationSettingServic
 import com.igot.cb.util.Constants;
 
 import org.igot.common.ApiResponse;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,9 +12,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/notificationSetting")
 public class UserNotificationSettingController {
 
-    @Autowired
     private UserNotificationSettingService userNotificationSettingService;
 
+    public UserNotificationSettingController(UserNotificationSettingService userNotificationSettingService) {
+        this.userNotificationSettingService = userNotificationSettingService;
+    }
 
     @PostMapping("/upsert")
     public ResponseEntity<ApiResponse> upsertUserNotificationSetting(

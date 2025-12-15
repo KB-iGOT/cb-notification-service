@@ -1,8 +1,6 @@
 package com.igot.cb.userNotificationSetting.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.igot.cb.transactional.redis.cache.CacheService;
 import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
 import com.igot.cb.userNotificationSetting.enums.NotificationType;
 import com.igot.cb.userNotificationSetting.dto.NotificationSettingRequest;
@@ -14,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
 import org.igot.common.ApiResponse;
 import org.igot.common.auth.AccessTokenValidator;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -31,18 +28,14 @@ import static com.igot.cb.util.Constants.*;
 @Slf4j
 public class UserNotificationSettingServiceImpl implements UserNotificationSettingService {
 
-
-    @Autowired
-    AccessTokenValidator accessTokenValidator;
-
-    @Autowired
-    CacheService cacheService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
+    private AccessTokenValidator accessTokenValidator;
     private NotificationSettingRepository notificationSettingRepository;
+
+
+    public UserNotificationSettingServiceImpl (AccessTokenValidator accessTokenValidator, NotificationSettingRepository notificationSettingRepository) {
+        this.accessTokenValidator = accessTokenValidator;
+        this.notificationSettingRepository = notificationSettingRepository;
+    }
 
     @Override
     public ApiResponse upsertUserNotificationSetting(JsonNode userNotificationDetail, String authToken) {

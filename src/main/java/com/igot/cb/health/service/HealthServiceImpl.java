@@ -2,6 +2,8 @@ package com.igot.cb.health.service;
 
 import com.igot.cb.util.Constants;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.igot.common.ApiResponse;
 import org.igot.common.cassandra.CassandraOperation;
 import org.slf4j.Logger;
@@ -17,15 +19,17 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class HealthServiceImpl implements HealthService {
 
-    @Autowired
-    CassandraOperation cassandraOperation;
+    private CassandraOperation cassandraOperation;
 
-    private Logger log = LoggerFactory.getLogger(getClass().getName());
+    public HealthServiceImpl(CassandraOperation cassandraOperation) {
+        this.cassandraOperation = cassandraOperation;
+    }
 
     @Override
-    public ApiResponse checkHealthStatus() throws Exception {
+    public ApiResponse checkHealthStatus() {
         ApiResponse response = ApiResponse.createDefaultResponse(Constants.API_HEALTH_CHECK);
         try {
             response.put(Constants.HEALTHY, true);

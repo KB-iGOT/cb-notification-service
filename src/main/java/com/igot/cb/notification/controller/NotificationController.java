@@ -6,7 +6,6 @@ import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.util.Constants;
 
 import org.igot.common.ApiResponse;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,8 +19,11 @@ import static com.igot.cb.util.Constants.*;
 @RequestMapping("/v1/notifications")
 public class NotificationController {
 
-    @Autowired
-    NotificationService notificationService;
+    private NotificationService notificationService;
+
+    public NotificationController(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     @PostMapping("/create")
     public ResponseEntity<ApiResponse> createNotification(@RequestBody JsonNode userNotificationDetail,

@@ -21,7 +21,6 @@ import org.igot.common.auth.AccessTokenValidator;
 import org.igot.common.cassandra.CassandraOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -36,19 +35,18 @@ import static com.igot.cb.util.Constants.*;
 @Slf4j
 public class NotificationServiceImpl implements NotificationService {
 
-
-
-    @Autowired
-    AccessTokenValidator accessTokenValidator;
-
-    @Autowired
-    CassandraOperation cassandraOperation;
-
-    @Autowired
+    private AccessTokenValidator accessTokenValidator;
+    private CassandraOperation cassandraOperation;
     private ObjectMapper objectMapper;
-
-    @Autowired
     private NotificationSettingRepository notificationSettingRepository;
+
+    public NotificationServiceImpl(AccessTokenValidator accessTokenValidator, CassandraOperation cassandraOperation,
+            ObjectMapper objectMapper, NotificationSettingRepository notificationSettingRepository) {
+        this.accessTokenValidator = accessTokenValidator;
+        this.cassandraOperation = cassandraOperation;
+        this.objectMapper = objectMapper;
+        this.notificationSettingRepository = notificationSettingRepository;
+    }
 
     private final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
 
@@ -682,7 +680,6 @@ public class NotificationServiceImpl implements NotificationService {
         String action = (String) request.get(ACTION);
 
         try {
-            List<Map<String, Object>> userNotifications = new ArrayList<>();
             List<String> notificationIds;
             List<Map<String, Object>> insertedAndMarked = new ArrayList<>();
 
@@ -724,7 +721,7 @@ public class NotificationServiceImpl implements NotificationService {
                 }
             }
 
-            userNotifications = fetchNotifications(userId);
+            List<Map<String, Object>> userNotifications = fetchNotifications(userId);
             if (ALL.equalsIgnoreCase(type)) {
                 notificationIds = userNotifications.stream()
                         .map(n -> (String) n.get(NOTIFICATION_ID))
