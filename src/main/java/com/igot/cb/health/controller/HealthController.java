@@ -19,13 +19,13 @@ public class HealthController {
     }
 
     @GetMapping("/health")
-    public ResponseEntity<ApiResponse> healthCheck() throws Exception {
+    public ResponseEntity<ApiResponse> healthCheck() {
         ApiResponse response = healthService.checkHealthStatus();
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
     @GetMapping("/liveness")
-    public ResponseEntity<String> livenessCheck() throws Exception {
+    public ResponseEntity<String> livenessCheck() {
         return new ResponseEntity<>("Status ok", HttpStatus.OK);
     }
 }

@@ -474,6 +474,7 @@ public class Constants {
     public static final String DATA_CENTER_DEFAULT_VALUE = "datacenter1";
     public static final String INVALID_PAYLOAD_ERR_MSG = "Missing or invalid 'request' node in payload";
     public static final String INVALID_REQUEST_ERR_MSG = "Missing or invalid 'request' node: {}";
+    public static final String PARSE_ERROR = "PARSE_ERROR";
 
     private Constants() {
     }

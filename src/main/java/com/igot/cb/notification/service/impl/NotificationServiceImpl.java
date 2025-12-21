@@ -624,13 +624,13 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     public Instant getInstant(Object value) {
-        if (value instanceof Instant) {
-            return (Instant) value;
-        } else if (value instanceof Date) {
-            return ((Date) value).toInstant();
-        } else if (value instanceof String) {
+        if (value instanceof Instant instantValue) {
+            return instantValue;
+        } else if (value instanceof Date dateValue) {
+            return (dateValue).toInstant();
+        } else if (value instanceof String strValue) {
             try {
-                return Instant.parse((String) value);
+                return Instant.parse(strValue);
             } catch (Exception e) {
                 log.warn("Invalid created_at format: {}", value);
             }
@@ -697,7 +697,7 @@ public class NotificationServiceImpl implements NotificationService {
                 }else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                     log.info("Global action with type 'individual' - inserting and marking global notifications as read for user {}", userId);
                     notificationIds = extractIndividualNotificationIds(request, response);
-                    if (notificationIds == null) return response;
+                    if (CollectionUtils.isEmpty(notificationIds)) return response;
                     List<Map<String, Object>> globalNotifications = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_READ);
                     List<Map<String, Object>> targetGlobals = globalNotifications.stream()
                             .filter(n -> notificationIds.contains(n.get(NOTIFICATION_ID)))
@@ -730,7 +730,7 @@ public class NotificationServiceImpl implements NotificationService {
                 insertedAndMarked = insertAndMarkGlobalNotificationsAsRead(userId, globalNotifications);
             } else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                 notificationIds = extractIndividualNotificationIds(request, response);
-                if (notificationIds == null) return response;
+                if (CollectionUtils.isEmpty(notificationIds)) return response;
             } else {
                 updateErrorDetails(response, "Invalid type. Allowed values: all, individual", HttpStatus.BAD_REQUEST);
                 return response;
@@ -759,7 +759,7 @@ public class NotificationServiceImpl implements NotificationService {
             return (List<String>) idsObj;
         } else {
             updateErrorDetails(response, "Missing or invalid 'ids' field for individual type", HttpStatus.BAD_REQUEST);
-            return null;
+            return Collections.emptyList();
         }
     }
 
@@ -960,12 +960,12 @@ public class NotificationServiceImpl implements NotificationService {
                 Map<String, Object> record = countRecords.get(0);
                 if (record != null) {
                     Object countObj = record.get(COUNT);
-                    if (countObj instanceof Number) {
-                        unreadCount = ((Number) countObj).intValue();
-                        Instant lastUpdated = record.get(UPDATED_AT) instanceof Instant ? (Instant) record.get(UPDATED_AT) : null;
+                    if (countObj instanceof Number recordCount) {
+                        unreadCount = recordCount.intValue();
+                        Instant lastUpdated = record.get(UPDATED_AT) instanceof Instant recordUpdatedAt ? recordUpdatedAt : null;
                         if (lastUpdated != null ) {
                             int globalNotificationCount = fetchGlobalNotifications(MAX_NOTIFICATIONS_FETCH_FOR_COUNT).stream()
-                                    .filter(n -> n.get(CREATED_AT) instanceof Instant && ((Instant)n.get(CREATED_AT)).isAfter(lastUpdated))
+                                    .filter(n -> n.get(CREATED_AT) instanceof Instant recordCreatedAt && recordCreatedAt.isAfter(lastUpdated))
                                     .toList().size();
                             unreadCount += globalNotificationCount;
                         }
@@ -1116,9 +1116,9 @@ public class NotificationServiceImpl implements NotificationService {
         fieldsToRemove.forEach(resultMap::remove);
         Object messageObj = resultMap.get("message");
 
-        if (messageObj instanceof String && messageObj != null) {
+        if (messageObj instanceof String strMessage && messageObj != null) {
             try {
-                JsonNode parsed = objectMapper.readTree((String) messageObj);
+                JsonNode parsed = objectMapper.readTree(strMessage);
                 resultMap.put("message", parsed);
                 log.info("Message successfully parsed into JSON: {}", parsed.toPrettyString());
             } catch (Exception e) {

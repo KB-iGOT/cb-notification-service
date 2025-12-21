@@ -23,9 +23,6 @@ class HealthServiceImplTest {
     @Mock
     private CassandraOperation cassandraOperation;
 
-    @Mock
-    private ApiResponse response;
-
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);

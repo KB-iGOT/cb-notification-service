@@ -5,10 +5,13 @@ import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
 import org.apache.poi.ss.usermodel.*;
+import org.igot.common.CustomException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -24,7 +27,7 @@ public class FileProcessService {
       return validateFileAndProcessRows(incomingFile);
     } catch (Exception e) {
       log.error("Error occurred during file processing: {}", e.getMessage());
-      throw new RuntimeException(e.getMessage());
+      throw new CustomException(Constants.PARSE_ERROR, e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -33,7 +36,7 @@ public class FileProcessService {
 
     String fileName = file.getOriginalFilename();
     if (fileName == null) {
-      throw new IllegalArgumentException("File name is null");
+      throw new CustomException(Constants.PARSE_ERROR, "File name is null", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     try (InputStream inputStream = file.getInputStream()) {
@@ -45,7 +48,7 @@ public class FileProcessService {
       } else if (fileName.endsWith(".csv")) {
         return processCsvAndSendMessage(inputStream);
       } else {
-        throw new UnsupportedOperationException("Unsupported file type: " + fileName);
+        throw new CustomException(Constants.PARSE_ERROR, "Unsupported file type: " + fileName, HttpStatus.INTERNAL_SERVER_ERROR);
       }
     } catch (IOException e) {
       log.error("Error while processing file: {}", e.getMessage(), e);
@@ -150,7 +153,7 @@ public class FileProcessService {
     }
   }
 
-  private Date parseDate(String value) throws Exception {
+  private Date parseDate(String value) throws ParseException {
     // Customize this date parsing logic based on the expected date format in your CSV
     SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_FORMAT);
     return dateFormat.parse(value);
