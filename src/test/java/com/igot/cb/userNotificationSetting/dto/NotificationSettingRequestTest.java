@@ -32,8 +32,8 @@ class NotificationSettingRequestTest {
     @Test
     void testEquals_nullAndDifferentClass() {
         NotificationSettingRequest r1 = new NotificationSettingRequest("EMAIL", true);
-        assertNotEquals(r1, null);
-        assertNotEquals(r1, "some string");
+        assertNotEquals(null, r1);
+        assertNotEquals("some string", r1);
     }
 
     @Test

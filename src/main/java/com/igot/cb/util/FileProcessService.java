@@ -101,8 +101,8 @@ public class FileProcessService {
       log.info("Number of Data Rows Processed: " + dataRows.size());
       return dataRows;
     } catch (Exception e) {
-      log.error(e.getMessage());
-      throw new RuntimeException(e.getMessage());
+      log.error("FileProcessService::processSheetAndSendMessage, expceiton while processing: ", e);
+      throw new CustomException(Constants.PARSE_ERROR, "Failed to process: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -138,8 +138,8 @@ public class FileProcessService {
       }
       log.info("Number of Data Rows Processed: " + dataRows.size());
     } catch (Exception e) {
-      log.error(e.getMessage());
-      throw new RuntimeException(e.getMessage());
+      log.error("FileProcessService::processSheetAndSendMessage, expceiton while processing: ", e);
+      throw new CustomException(Constants.PARSE_ERROR, "Failed to process: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
     }
     return dataRows;
   }

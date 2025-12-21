@@ -48,7 +48,7 @@ public class PayloadValidation {
       for (ValidationMessage message : validationMessages) {
         errorMessage.append(message.getMessage()).append("\n");
       }
-      logger.error("Validation Error {}", errorMessage.toString());
+      logger.error("Validation Error {}", errorMessage);
       throw new CustomException("Validation Error", errorMessage.toString(), HttpStatus.BAD_REQUEST);
     }
   }
