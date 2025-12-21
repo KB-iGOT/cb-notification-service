@@ -19,7 +19,7 @@ import java.util.*;
 @Service
 public class FileProcessService {
 
-  final String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+  private static final String DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
   public List<Map<String, String>> processExcelFile(MultipartFile incomingFile) {
     log.info("DesignationServiceImpl::processExcelFile");
@@ -110,7 +110,7 @@ public class FileProcessService {
     log.info("DesignationServiceImpl::processCsvAndSendMessage");
     List<Map<String, String>> dataRows = new ArrayList<>();
     try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withFirstRecordAsHeader())) {
+        CSVParser csvParser = CSVFormat.DEFAULT.builder().setHeader().setSkipHeaderRecord(true).build().parse(reader)) {
 
       List<String> headers = csvParser.getHeaderNames();
 

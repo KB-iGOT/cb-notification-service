@@ -57,7 +57,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_Success_WithComplexMessage() throws Exception {
+    void testCreateNotification_Success_WithComplexMessage() throws Exception{
         // Prepare input
         String authToken = "Bearer token";
         String userId = "testUser";
@@ -119,7 +119,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_MissingUserId() throws Exception {
+    void testCreateNotification_MissingUserId() throws Exception{
         String authToken = "Bearer token";
         ObjectMapper mapper = new ObjectMapper();
         String payload = "{ \"request\": { \"type\": \"comment\" } }";
@@ -1774,7 +1774,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_DisabledSetting() throws Exception {
+    void testCreateNotification_DisabledSetting() {
         ObjectMapper realMapper = new ObjectMapper();
         JsonNode request = realMapper.createObjectNode()
                 .set(Constants.REQUEST, realMapper.createObjectNode()

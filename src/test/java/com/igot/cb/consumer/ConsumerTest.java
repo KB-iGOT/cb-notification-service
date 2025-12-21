@@ -51,7 +51,7 @@ class ConsumerTest {
     }
 
     @Test
-    void testConsume_serviceThrowsException_logsError() throws Exception {
+    void testConsume_serviceThrowsException_logsError() {
         String message = "{ \"request\": { \"user_ids\": [{\"user_id\": \"user1\"}] } }";
 
         Consumer spyConsumer = Mockito.spy(consumer);

@@ -28,7 +28,7 @@ class HealthControllerTest {
     }
 
     @Test
-    void testHealthCheck_returnsApiResponseWithCorrectStatus() throws Exception {
+    void testHealthCheck_returnsApiResponseWithCorrectStatus() {
         ApiResponse mockResponse = new ApiResponse();
         mockResponse.setResponseCode(HttpStatus.OK);
 
@@ -42,7 +42,7 @@ class HealthControllerTest {
     }
 
     @Test
-    void testLivenessCheck_returnsStatusOk() throws Exception {
+    void testLivenessCheck_returnsStatusOk() {
         ResponseEntity<?> response = healthController.livenessCheck();
 
         assertEquals("Status ok", response.getBody());

@@ -29,7 +29,7 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_Healthy() throws Exception {
+    void testCheckHealthStatus_Healthy() {
         List<Map<String, Object>> cassandraResponse = List.of(Map.of("dummyKey", "dummyValue"));
         when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
@@ -49,7 +49,7 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_Unhealthy() throws Exception {
+    void testCheckHealthStatus_Unhealthy() {
         // Mock Cassandra returns an empty list
         List<Map<String, Object>> cassandraResponse = Collections.emptyList();
         when(cassandraOperation.getRecordsByProperties(
@@ -70,7 +70,7 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_Exception() throws Exception {
+    void testCheckHealthStatus_Exception() {
         when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenThrow(new RuntimeException("Cassandra error"));
@@ -89,7 +89,7 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_whenCassandraHealthCheckThrows_setsInternalServerError() throws Exception {
+    void testCheckHealthStatus_whenCassandraHealthCheckThrows_setsInternalServerError() {
         // Spy to partially mock the service
         HealthServiceImpl spyService = Mockito.spy(healthService);
 

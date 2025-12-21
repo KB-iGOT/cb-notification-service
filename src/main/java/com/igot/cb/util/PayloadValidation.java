@@ -3,6 +3,7 @@ package com.igot.cb.util;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
 import com.networknt.schema.ValidationMessage;
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,7 +25,7 @@ public class PayloadValidation {
   public void validatePayload(String fileName, JsonNode payload) {
    log.info("PayloadValidation::validatePayload:inside");
     try {
-      JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance();
+      JsonSchemaFactory schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7);
       InputStream schemaStream = schemaFactory.getClass().getResourceAsStream(fileName);
       JsonSchema schema = schemaFactory.getSchema(schemaStream);
       if (payload.isArray()) {

@@ -1,6 +1,5 @@
 package com.igot.cb.notification.enums;
 
-import com.igot.cb.notification.enums.NotificationCategory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
