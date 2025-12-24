@@ -89,8 +89,8 @@ class NotificationSettingEntityTest {
     @Test
     void testEquals_nullAndDifferentClass() {
         NotificationSettingEntity entity = new NotificationSettingEntity();
-        assertNotEquals(entity, null);
-        assertNotEquals(entity, "some string");
+        assertNotEquals(null, entity);
+        assertNotEquals("some string", entity);
     }
 
     @Test
