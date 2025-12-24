@@ -1,11 +1,11 @@
-package com.igot.cb.userNotificationSetting.service.impl;
+package com.igot.cb.notification.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
-import com.igot.cb.userNotificationSetting.enums.NotificationType;
-import com.igot.cb.userNotificationSetting.dto.NotificationSettingRequest;
-import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
-import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
+import com.igot.cb.notification.dto.NotificationSettingRequest;
+import com.igot.cb.notification.entity.NotificationSettingEntity;
+import com.igot.cb.notification.enums.NotificationType;
+import com.igot.cb.notification.repository.NotificationSettingRepository;
+import com.igot.cb.notification.service.UserNotificationSettingService;
 import com.igot.cb.util.Constants;
 import io.micrometer.common.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;

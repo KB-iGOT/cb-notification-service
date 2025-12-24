@@ -1,10 +1,9 @@
 
 
-package com.igot.cb.notification.service.impl.controller;
+package com.igot.cb.notification.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.igot.cb.notification.controller.NotificationController;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.util.Constants;

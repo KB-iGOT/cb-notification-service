@@ -1,4 +1,4 @@
-package com.igot.cb.userNotificationSetting.service;
+package com.igot.cb.notification.service;
 
 import org.igot.common.ApiResponse;
 

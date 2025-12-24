@@ -1,4 +1,4 @@
-package com.igot.cb.userNotificationSetting.entity;
+package com.igot.cb.notification.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;

@@ -1,8 +1,8 @@
-package com.igot.cb.userNotificationSetting.controller;
+package com.igot.cb.notification.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
+import com.igot.cb.notification.service.UserNotificationSettingService;
 
 import org.igot.common.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,7 +1,7 @@
-package com.igot.cb.userNotificationSetting.controller;
+package com.igot.cb.notification.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.igot.cb.userNotificationSetting.service.UserNotificationSettingService;
+import com.igot.cb.notification.service.UserNotificationSettingService;
 import com.igot.cb.util.Constants;
 
 import org.igot.common.ApiResponse;

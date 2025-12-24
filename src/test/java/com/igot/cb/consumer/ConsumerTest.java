@@ -28,7 +28,7 @@ class ConsumerTest {
 
 
     @Test
-    void testConsume_messageMissingRequest_doesNotCallService() throws Exception {
+    void testConsume_messageMissingRequest_doesNotCallService() {
         // Message with no "request" field
         String message = "{ \"foo\": \"bar\" }";
         Consumer spyConsumer = Mockito.spy(consumer);

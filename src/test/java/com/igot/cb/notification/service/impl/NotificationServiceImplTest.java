@@ -3,10 +3,10 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.igot.cb.notification.entity.NotificationSettingEntity;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
-import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
-import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
+import com.igot.cb.notification.repository.NotificationSettingRepository;
 import com.igot.cb.util.Constants;
 
 import org.igot.common.ApiResponse;

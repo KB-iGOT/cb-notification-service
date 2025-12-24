@@ -1,4 +1,4 @@
-package com.igot.cb.userNotificationSetting.dto;
+package com.igot.cb.notification.dto;
 
 import org.junit.jupiter.api.Test;
 
