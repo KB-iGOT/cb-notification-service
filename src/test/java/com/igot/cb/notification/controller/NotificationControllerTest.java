@@ -42,7 +42,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.CREATED);
 
-        when(notificationService.createNotification(eq(json), eq(token))).thenReturn(apiResponse);
+        when(notificationService.createNotification(json, token)).thenReturn(apiResponse);
 
         ResponseEntity<ApiResponse> response = notificationController.createNotification(json, token);
         assertEquals(apiResponse, response.getBody());
@@ -55,7 +55,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.bulkCreateNotifications(eq(json))).thenReturn(apiResponse);
+        when(notificationService.bulkCreateNotifications(json)).thenReturn(apiResponse);
 
         ResponseEntity<ApiResponse> response = notificationController.createBulkNotification(json);
         assertEquals(apiResponse, response.getBody());
@@ -69,7 +69,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.readByUserIdAndNotificationId(eq(notifId), eq(token))).thenReturn(apiResponse);
+        when(notificationService.readByUserIdAndNotificationId(notifId, token)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.readByUserIdAndNotificationId(notifId, token);
         assertEquals(apiResponse, response.getBody());
@@ -87,7 +87,7 @@ class NotificationControllerTest {
         apiResponse.setResponseCode(HttpStatus.OK);
 
         when(notificationService.getNotificationsByUserIdAndLastXDays(
-                eq(token), eq(days), eq(page), eq(size), eq(status), eq(subType)))
+                token, days, page, size, status, subType))
                 .thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.getLastXDaysNotifications(
@@ -108,7 +108,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.markNotificationsAsRead(eq(token), eq(request))).thenReturn(apiResponse);
+        when(notificationService.markNotificationsAsRead(token, request)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.markNotificationsAsRead(token, requestBody);
 
@@ -128,7 +128,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.markNotificationsAsDeleted(eq(token), eq(ids))).thenReturn(apiResponse);
+        when(notificationService.markNotificationsAsDeleted(token, ids)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.markNotificationsAsDeleted(token, requestBody);
 
@@ -143,7 +143,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.getUnreadNotificationCount(eq(token), eq(days))).thenReturn(apiResponse);
+        when(notificationService.getUnreadNotificationCount(token, days)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.getUnreadNotificationCount(token, days);
 
@@ -157,7 +157,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.getResetNotificationCount(eq(token))).thenReturn(apiResponse);
+        when(notificationService.getResetNotificationCount(token)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.getResetNotificationCount(token);
 
