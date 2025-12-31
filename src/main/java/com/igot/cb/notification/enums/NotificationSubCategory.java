@@ -101,7 +101,11 @@ public enum NotificationSubCategory {
     INSTRUCTOR_ADD_BATCH(false),
     PUBLISHED_NEW_VERSION(false),
     RETIRED(false),
-    RETIRE_SCHEDULED(false);
+    RETIRE_SCHEDULED(false),
+    APPROVED_CONTENT_RETIREMENT(false),
+    CONTENT_RETIREMENT_SEVEN_DAYS(false),
+    CONTENT_RETIREMENT_ONE_DAYS(false),
+    CONTENT_FINALLY_RETIRED(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
