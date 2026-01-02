@@ -106,7 +106,9 @@ public enum NotificationSubCategory {
     CONTENT_RETIREMENT_SEVEN_DAYS(false),
     CONTENT_RETIREMENT_ONE_DAYS(false),
     CONTENT_FINALLY_RETIRED(false),
-    RETIRED_REJECTED(false);
+    RETIRE_REJECTED(false),
+    RETIRE_APPROVED(false),
+    CONTENT_RETIRE(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
