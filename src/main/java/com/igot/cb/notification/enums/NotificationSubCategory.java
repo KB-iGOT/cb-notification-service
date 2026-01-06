@@ -98,7 +98,17 @@ public enum NotificationSubCategory {
     BP_ASSIGNMENT_UPLOAD(false),
     BP_ASSIGNMENT_EVALUATE(false),
     BP_ASSIGNMENT_SUBMIT(false),
-    INSTRUCTOR_ADD_BATCH(false);
+    INSTRUCTOR_ADD_BATCH(false),
+    PUBLISHED_NEW_VERSION(false),
+    RETIRED(false),
+    RETIRE_SCHEDULED(false),
+    APPROVED_CONTENT_RETIREMENT(false),
+    CONTENT_RETIREMENT_SEVEN_DAYS(false),
+    CONTENT_RETIREMENT_ONE_DAYS(false),
+    CONTENT_FINALLY_RETIRED(false),
+    RETIRE_REJECTED(false),
+    RETIRE_APPROVED(false),
+    CONTENT_RETIRE(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
