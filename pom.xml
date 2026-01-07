@@ -254,11 +254,11 @@
 					</excludes>
 				</configuration>
 			</plugin>
-			<plugin>
+			<!-- <plugin>
             	<groupId>org.codehaus.mojo</groupId>
             	<artifactId>sonar-maven-plugin</artifactId>
             	<version>3.8.0.2131</version>
-			</plugin>
+			</plugin> -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
