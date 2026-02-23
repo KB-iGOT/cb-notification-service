@@ -28,7 +28,7 @@ class ConsumerTest {
 
 
     @Test
-    void testConsume_messageMissingRequest_doesNotCallService() throws Exception {
+    void testConsume_messageMissingRequest_doesNotCallService() {
         // Message with no "request" field
         String message = "{ \"foo\": \"bar\" }";
         Consumer spyConsumer = Mockito.spy(consumer);
@@ -51,9 +51,8 @@ class ConsumerTest {
     }
 
     @Test
-    void testConsume_serviceThrowsException_logsError() throws Exception {
+    void testConsume_serviceThrowsException_logsError() {
         String message = "{ \"request\": { \"user_ids\": [{\"user_id\": \"user1\"}] } }";
-        JsonNode jsonNode = objectMapper.readTree(message);
 
         Consumer spyConsumer = Mockito.spy(consumer);
         ReflectionTestUtils.setField(spyConsumer, "objectMapper", objectMapper);

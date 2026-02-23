@@ -1,7 +1,6 @@
 package com.igot.cb.transactional.redis.config;
 
 import com.igot.cb.util.CbServerProperties;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -28,8 +27,11 @@ public class RedisConfig {
   @Value("${spring.redis.port}")
   private int redisPort;
 
-  @Autowired
   private CbServerProperties cbServerProperties;
+
+  public RedisConfig(CbServerProperties cbServerProperties) {
+    this.cbServerProperties = cbServerProperties;
+  }
 
   @Bean
   public RedisConnectionFactory redisConnectionFactory() {

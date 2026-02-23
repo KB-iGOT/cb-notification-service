@@ -3,7 +3,6 @@ package com.igot.cb.transactional.redis.cache;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -13,10 +12,13 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class CacheService {
 
-  @Autowired
   private RedisTemplate<String, String> redisTemplate;
-  @Autowired
   private ObjectMapper objectMapper;
+
+  public CacheService (RedisTemplate<String, String> redisTemplate, ObjectMapper objectMapper) {
+    this.redisTemplate = redisTemplate;
+    this.objectMapper = objectMapper;
+  }
 
   @Value("${spring.redis.cacheTtl}")
   private long cacheTtl;

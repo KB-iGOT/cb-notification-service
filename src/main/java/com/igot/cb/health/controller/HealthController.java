@@ -1,8 +1,8 @@
 package com.igot.cb.health.controller;
 
 import com.igot.cb.health.service.HealthService;
-import com.igot.cb.util.ApiResponse;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import org.igot.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,17 +12,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class HealthController {
 
-    @Autowired
     private HealthService healthService;
 
+    public HealthController(HealthService healthService) {
+        this.healthService = healthService;
+    }
+
     @GetMapping("/health")
-    public ResponseEntity<?> healthCheck() throws Exception {
+    public ResponseEntity<ApiResponse> healthCheck() {
         ApiResponse response = healthService.checkHealthStatus();
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
     @GetMapping("/liveness")
-    public ResponseEntity<?> livenessCheck() throws Exception {
+    public ResponseEntity<String> livenessCheck() {
         return new ResponseEntity<>("Status ok", HttpStatus.OK);
     }
 }

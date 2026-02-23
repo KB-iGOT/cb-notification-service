@@ -1,9 +1,10 @@
 package com.igot.cb.health.service.impl;
 
 import com.igot.cb.health.service.HealthServiceImpl;
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+
+import org.igot.common.ApiResponse;
+import org.igot.common.cassandra.CassandraOperation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -22,18 +23,15 @@ class HealthServiceImplTest {
     @Mock
     private CassandraOperation cassandraOperation;
 
-    @Mock
-    private ApiResponse response;
-
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
     }
 
     @Test
-    void testCheckHealthStatus_Healthy() throws Exception {
+    void testCheckHealthStatus_Healthy() {
         List<Map<String, Object>> cassandraResponse = List.of(Map.of("dummyKey", "dummyValue"));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
@@ -51,10 +49,10 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_Unhealthy() throws Exception {
+    void testCheckHealthStatus_Unhealthy() {
         // Mock Cassandra returns an empty list
         List<Map<String, Object>> cassandraResponse = Collections.emptyList();
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenReturn(cassandraResponse);
 
@@ -72,8 +70,8 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_Exception() throws Exception {
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+    void testCheckHealthStatus_Exception() {
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), isNull(), isNull(), anyInt()
         )).thenThrow(new RuntimeException("Cassandra error"));
 
@@ -91,7 +89,7 @@ class HealthServiceImplTest {
     }
 
     @Test
-    void testCheckHealthStatus_whenCassandraHealthCheckThrows_setsInternalServerError() throws Exception {
+    void testCheckHealthStatus_whenCassandraHealthCheckThrows_setsInternalServerError() {
         // Spy to partially mock the service
         HealthServiceImpl spyService = Mockito.spy(healthService);
 

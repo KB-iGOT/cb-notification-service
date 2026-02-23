@@ -1,9 +1,11 @@
 package com.igot.cb.health.service;
 
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import com.igot.cb.util.ProjectUtil;
+
+import lombok.extern.slf4j.Slf4j;
+
+import org.igot.common.ApiResponse;
+import org.igot.common.cassandra.CassandraOperation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,16 +19,18 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class HealthServiceImpl implements HealthService {
 
-    @Autowired
-    CassandraOperation cassandraOperation;
+    private CassandraOperation cassandraOperation;
 
-    private Logger log = LoggerFactory.getLogger(getClass().getName());
+    public HealthServiceImpl(CassandraOperation cassandraOperation) {
+        this.cassandraOperation = cassandraOperation;
+    }
 
     @Override
-    public ApiResponse checkHealthStatus() throws Exception {
-        ApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_HEALTH_CHECK);
+    public ApiResponse checkHealthStatus() {
+        ApiResponse response = ApiResponse.createDefaultResponse(Constants.API_HEALTH_CHECK);
         try {
             response.put(Constants.HEALTHY, true);
             List<Map<String, Object>> healthResults = new ArrayList<>();
@@ -47,7 +51,7 @@ public class HealthServiceImpl implements HealthService {
 
         boolean isHealthy = false;
         try {
-            List<Map<String, Object>> cassandraQueryResponse = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+            List<Map<String, Object>> cassandraQueryResponse = cassandraOperation.getRecordsByProperties(
                     Constants.KEYSPACE_SUNBIRD,
                     Constants.TABLE_SYSTEM_SETTINGS,
                     null,
