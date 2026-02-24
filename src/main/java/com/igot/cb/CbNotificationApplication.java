@@ -15,7 +15,7 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-@ComponentScan(basePackages = { "com.igot.cb", "org.igot.common" })
+@ComponentScan(basePackages = { "com.igot.cb" })
 @EntityScan("com.igot.cb")
 @SpringBootApplication
 public class CbNotificationApplication {
