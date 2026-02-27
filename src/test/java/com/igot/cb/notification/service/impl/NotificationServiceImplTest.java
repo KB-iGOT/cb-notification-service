@@ -3,17 +3,15 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.igot.cb.authentication.util.AccessTokenValidator;
+import com.igot.cb.notification.entity.NotificationSettingEntity;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
-import com.igot.cb.transactional.cassandrautils.CassandraOperation;
-import com.igot.cb.userNotificationSetting.entity.NotificationSettingEntity;
-import com.igot.cb.userNotificationSetting.repository.NotificationSettingRepository;
-import com.igot.cb.util.ApiResponse;
+import com.igot.cb.notification.repository.NotificationSettingRepository;
 import com.igot.cb.util.Constants;
-import com.igot.cb.util.ProjectUtil;
+
+import org.igot.common.ApiResponse;
+import org.igot.common.auth.AccessTokenValidator;
+import org.igot.common.cassandra.CassandraOperation;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.*;
@@ -26,7 +24,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static com.igot.cb.util.Constants.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -42,7 +39,6 @@ class NotificationServiceImplTest {
     private AccessTokenValidator accessTokenValidator;
     private static final String NOTIFICATION_ID_1 = "notification-id-1";
     private static final String NOTIFICATION_ID_2 = "notification-id-2";
-    private static final String userId = "user-123";
 
     @Mock
     private CassandraOperation cassandraOperation;
@@ -61,7 +57,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_Success_WithComplexMessage() throws Exception {
+    void testCreateNotification_Success_WithComplexMessage() throws Exception{
         // Prepare input
         String authToken = "Bearer token";
         String userId = "testUser";
@@ -123,7 +119,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_MissingUserId() throws Exception {
+    void testCreateNotification_MissingUserId() throws Exception{
         String authToken = "Bearer token";
         ObjectMapper mapper = new ObjectMapper();
         String payload = "{ \"request\": { \"type\": \"comment\" } }";
@@ -362,11 +358,11 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
 
         // Correctly mock user and global notification calls separately
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif1, notif2));
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of()); // empty global notifications
 
@@ -531,7 +527,7 @@ class NotificationServiceImplTest {
 
     @Test
     void testReadByUserIdAndNotificationId_Success() {
-        ApiResponse expectedResponse = ProjectUtil.createDefaultResponse(Constants.USER_NOTIFICATION_READ_NOTIFICATIONID);
+        ApiResponse expectedResponse = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_READ_NOTIFICATIONID);
         expectedResponse.setResponseCode(HttpStatus.OK);
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
         ApiResponse actualResponse = notificationService.readByUserIdAndNotificationId(NOTIFICATION_ID, AUTH_TOKEN);
@@ -668,7 +664,7 @@ class NotificationServiceImplTest {
 
         Map<String, Object> updateResponse = Map.of(Constants.RESPONSE, Constants.SUCCESS);
 
-        when(cassandraOperation.updateRecordByCompositeKey(
+        when(cassandraOperation.updateRecord(
                 eq(Constants.KEYSPACE_SUNBIRD),
                 eq(Constants.TABLE_USER_NOTIFICATION),
                 anyMap(),
@@ -680,7 +676,7 @@ class NotificationServiceImplTest {
         fetchMethod.setAccessible(true);
         ReflectionTestUtils.setField(notificationService, "cassandraOperation", cassandraOperation);
 
-        doReturn(List.of(notification)).when(cassandraOperation).getRecordsByPropertiesWithoutFiltering(
+        doReturn(List.of(notification)).when(cassandraOperation).getRecordsByProperties(
                 any(), any(), anyMap(), any(), anyInt());
 
         // Invoke processReadUpdate
@@ -705,11 +701,11 @@ class NotificationServiceImplTest {
 
         List<Map<String, Object>> notifications = List.of(notification);
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 any(), any(), anyMap(), any(), anyInt()
         )).thenReturn(notifications);
 
-        when(cassandraOperation.updateRecordByCompositeKey(
+        when(cassandraOperation.updateRecord(
                 any(), any(), anyMap(), anyMap()
         )).thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));
 
@@ -728,7 +724,7 @@ class NotificationServiceImplTest {
 
     @Test
     void testUpdateNotification_NotificationNotFound() throws Exception {
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 any(), any(), anyMap(), any(), anyInt()
         )).thenReturn(Collections.emptyList());
 
@@ -751,7 +747,7 @@ class NotificationServiceImplTest {
         notification.put(USER_ID, USER_ID);
         notification.put(NOTIFICATION_ID, NOTIFICATION_ID);
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 any(), any(), anyMap(), any(), anyInt()
         )).thenReturn(List.of(notification));
 
@@ -790,7 +786,7 @@ class NotificationServiceImplTest {
         Mockito.when(accessTokenValidator.fetchUserIdFromAccessToken(authToken))
                 .thenReturn(userId);
 
-        Mockito.when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        Mockito.when(cassandraOperation.getRecordsByProperties(
                         eq(Constants.KEYSPACE_SUNBIRD),
                         eq(Constants.TABLE_USER_NOTIFICATION),
                         anyMap(),
@@ -798,7 +794,7 @@ class NotificationServiceImplTest {
                         anyInt()))
                 .thenReturn(notifications);
 
-        Mockito.when(cassandraOperation.updateRecordByCompositeKey(
+        Mockito.when(cassandraOperation.updateRecord(
                         eq(Constants.KEYSPACE_SUNBIRD),
                         eq(Constants.TABLE_USER_NOTIFICATION),
                         anyMap(),
@@ -836,7 +832,7 @@ class NotificationServiceImplTest {
         Mockito.when(accessTokenValidator.fetchUserIdFromAccessToken(authToken))
                 .thenReturn(null);
 
-        Mockito.when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        Mockito.when(cassandraOperation.getRecordsByProperties(
                         eq(Constants.KEYSPACE_SUNBIRD),
                         eq(Constants.TABLE_USER_NOTIFICATION),
                         anyMap(),
@@ -844,7 +840,7 @@ class NotificationServiceImplTest {
                         anyInt()))
                 .thenReturn(notifications);
 
-        Mockito.when(cassandraOperation.updateRecordByCompositeKey(
+        Mockito.when(cassandraOperation.updateRecord(
                         eq(Constants.KEYSPACE_SUNBIRD),
                         eq(Constants.TABLE_USER_NOTIFICATION),
                         anyMap(),
@@ -865,7 +861,7 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
 
         Map<String, Object> record = Map.of(Constants.COUNT, 10);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), anyString(), anyMap(), anyList(), eq(1)))
                 .thenReturn(List.of(record));
 
@@ -900,7 +896,7 @@ class NotificationServiceImplTest {
     void testGetResetNotificationCount_success() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(USER_ID);
 
-        when(cassandraOperation.updateRecordByCompositeKey(
+        when(cassandraOperation.updateRecord(
                 anyString(), anyString(), anyMap(), anyMap()))
                 .thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));
 
@@ -935,7 +931,7 @@ class NotificationServiceImplTest {
         ObjectMapper realMapper = new ObjectMapper();
         JsonNode requestNode = realMapper.readTree("{\"message\":{\"data\":{\"discussionId\":\"d1\"}}}");
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), anyMap(), any(), anyInt()))
                 .thenReturn(Collections.emptyList());
         when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
                 .thenReturn(Map.of("response", "SUCCESS"));
@@ -965,7 +961,7 @@ class NotificationServiceImplTest {
         dbRecord.put(Constants.CREATED_AT, createdAt);
         dbRecord.put(Constants.MESSAGE, existingMessage.toString());
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
         when(objectMapper.readTree(anyString())).thenReturn(existingMessage);
         when(objectMapper.writeValueAsString(any(JsonNode.class))).thenReturn(existingMessage.toString());
@@ -976,7 +972,7 @@ class NotificationServiceImplTest {
         method.invoke(notificationService, subCategory, userId, requestNode);
 
         verify(cassandraOperation, times(1))
-                .updateRecordByCompositeKey(eq(Constants.KEYSPACE_SUNBIRD),
+                .updateRecord(eq(Constants.KEYSPACE_SUNBIRD),
                         eq(Constants.TABLE_USER_NOTIFICATION),
                         anyMap(), anyMap());
     }
@@ -997,7 +993,7 @@ class NotificationServiceImplTest {
         dbRecord.put(Constants.MESSAGE, existingMessage.toString());
 
         // mock Cassandra returning this record
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
 
         // mock ObjectMapper so it doesn’t return null
@@ -1011,7 +1007,7 @@ class NotificationServiceImplTest {
 
         // since subcategories differ, update should never be called
         verify(cassandraOperation, never())
-                .updateRecordByCompositeKey(any(), any(), anyMap(), anyMap());
+                .updateRecord(any(), any(), anyMap(), anyMap());
     }
 
 
@@ -1086,9 +1082,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.IS_DELETED, true);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1113,9 +1109,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.SUB_TYPE, "announcement");
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1149,9 +1145,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, true);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1175,9 +1171,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, true);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1203,7 +1199,7 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
         when(notificationSettingRepository.findByUserIdAndNotificationTypeAndIsDeletedFalse(eq(userId), any()))
                 .thenReturn(Optional.empty());
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1220,7 +1216,7 @@ class NotificationServiceImplTest {
         String userId = "u111";
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), anyMap(), any(), anyInt()))
                 .thenThrow(new RuntimeException("Cassandra down"));
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1242,9 +1238,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, false);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1262,7 +1258,7 @@ class NotificationServiceImplTest {
         ObjectMapper realMapper = new ObjectMapper();
         JsonNode requestNode = realMapper.readTree("{\"discussionId\":\"d1\"}");
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any(), anyInt()))
                 .thenReturn(Collections.emptyList());
         when(objectMapper.writeValueAsString(any(JsonNode.class)))
                 .thenReturn("{\"discussionId\":\"d1\"}");
@@ -1292,7 +1288,7 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, false);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1312,7 +1308,7 @@ class NotificationServiceImplTest {
         Map<String, Object> record = new HashMap<>();
         record.put(Constants.COUNT, "not-a-number"); // invalid type
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
                 .thenReturn(List.of(record));
 
@@ -1332,7 +1328,7 @@ class NotificationServiceImplTest {
         record.put(Constants.COUNT, 5);
         record.put(Constants.UPDATED_AT, null);
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
                 .thenReturn(List.of(record));
 
@@ -1353,10 +1349,10 @@ class NotificationServiceImplTest {
         record.put(Constants.COUNT, 2);
         record.put(Constants.UPDATED_AT, lastUpdated);
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
                 .thenReturn(List.of(record));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 anyString(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(Collections.emptyList());
 
@@ -1386,7 +1382,7 @@ class NotificationServiceImplTest {
         when(objectMapper.readTree(anyString()))
                 .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 any(), any(), any(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
 
@@ -1396,7 +1392,7 @@ class NotificationServiceImplTest {
         method.invoke(notificationService, subCategory, userId, requestNode);
 
         // ✅ Should skip update since subCategory mismatches
-        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+        verify(cassandraOperation, never()).updateRecord(any(), any(), any(), any());
     }
 
 
@@ -1418,7 +1414,7 @@ class NotificationServiceImplTest {
         when(objectMapper.readTree(anyString()))
                 .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
 
         Method method = NotificationServiceImpl.class.getDeclaredMethod(
@@ -1427,7 +1423,7 @@ class NotificationServiceImplTest {
         method.invoke(notificationService, subCategory, userId, requestNode);
 
         // ✅ Since clubWindow expired, no update should happen
-        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+        verify(cassandraOperation, never()).updateRecord(any(), any(), any(), any());
     }
 
 
@@ -1448,7 +1444,7 @@ class NotificationServiceImplTest {
         when(objectMapper.readTree(anyString()))
                 .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
 
         Method method = NotificationServiceImpl.class.getDeclaredMethod(
@@ -1456,7 +1452,7 @@ class NotificationServiceImplTest {
         method.setAccessible(true);
         method.invoke(notificationService, subCategory, "user123", requestNode);
 
-        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+        verify(cassandraOperation, never()).updateRecord(any(), any(), any(), any());
     }
 
 
@@ -1479,7 +1475,7 @@ class NotificationServiceImplTest {
         when(objectMapper.readTree(anyString()))
                 .thenAnswer(invocation -> realMapper.readTree((String) invocation.getArgument(0)));
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), any(), any(), any(), anyInt()))
                 .thenReturn(List.of(dbRecord));
 
         Method method = NotificationServiceImpl.class.getDeclaredMethod(
@@ -1488,7 +1484,7 @@ class NotificationServiceImplTest {
         method.invoke(notificationService, subCategory, userId, requestNode);
 
         // ✅ Since keys mismatch, no update should happen
-        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+        verify(cassandraOperation, never()).updateRecord(any(), any(), any(), any());
     }
 
 
@@ -1505,9 +1501,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, true);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1531,9 +1527,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, false);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1561,9 +1557,9 @@ class NotificationServiceImplTest {
         globalNotif.put(Constants.IS_DELETED, false);
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(userNotif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(globalNotif));
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1708,9 +1704,9 @@ class NotificationServiceImplTest {
         notif.put(Constants.READ, false);
         notif.put(Constants.SUB_TYPE, "invalidType"); // triggers Integer.MAX_VALUE
 
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_USER_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(notif));
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of());
 
         ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(
@@ -1724,7 +1720,7 @@ class NotificationServiceImplTest {
         String authToken = "t";
         String userId = "u1";
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()))
                 .thenReturn(List.of(Map.of(Constants.NOTIFICATION_ID, "g1", Constants.CREATED_AT, Instant.now())));
 
         Map<String, Object> request = new HashMap<>();
@@ -1741,7 +1737,7 @@ class NotificationServiceImplTest {
         String authToken = "t";
         String userId = "u1";
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any()))
+        when(cassandraOperation.updateRecord(any(), any(), any(), any()))
                 .thenReturn(Map.of(Constants.RESPONSE, Constants.FAILED));
 
         ApiResponse response = notificationService.markNotificationsAsDeleted(authToken, List.of("n1"));
@@ -1778,7 +1774,7 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testCreateNotification_DisabledSetting() throws Exception {
+    void testCreateNotification_DisabledSetting() {
         ObjectMapper realMapper = new ObjectMapper();
         JsonNode request = realMapper.createObjectNode()
                 .set(Constants.REQUEST, realMapper.createObjectNode()
@@ -1801,7 +1797,7 @@ class NotificationServiceImplTest {
     @Test
     void testGetUnreadNotificationCount_NoRecords() {
         when(accessTokenValidator.fetchUserIdFromAccessToken("t")).thenReturn("u1");
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
+        when(cassandraOperation.getRecordsByProperties(any(), eq(Constants.TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), eq(1)))
                 .thenReturn(Collections.emptyList());
 
         ApiResponse response = notificationService.getUnreadNotificationCount("t", 7);
@@ -1840,7 +1836,7 @@ class NotificationServiceImplTest {
         // Should not throw
         method.invoke(notificationService, subCategory, userId, requestNode);
 
-        verify(cassandraOperation, never()).updateRecordByCompositeKey(any(), any(), any(), any());
+        verify(cassandraOperation, never()).updateRecord(any(), any(), any(), any());
     }
 
 
@@ -1852,7 +1848,7 @@ class NotificationServiceImplTest {
 
         // Mock methods
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()
         )).thenReturn(new ArrayList<>()); // Simulate fetching global notifications
 
@@ -1917,7 +1913,7 @@ class NotificationServiceImplTest {
                 Map.of(NOTIFICATION_ID, "notification-id-1", "read", false),
                 Map.of(NOTIFICATION_ID, "notification-id-2", "read", false)
         );
-        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        when(cassandraOperation.getRecordsByProperties(
                 eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), any(), anyInt()
         )).thenReturn(globalNotifications);
 

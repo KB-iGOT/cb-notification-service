@@ -3,9 +3,9 @@ package com.igot.cb.notification.controller;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.service.NotificationService;
-import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import org.springframework.beans.factory.annotation.Autowired;
+
+import org.igot.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +19,11 @@ import static com.igot.cb.util.Constants.*;
 @RequestMapping("/v1/notifications")
 public class NotificationController {
 
-    @Autowired
-    NotificationService notificationService;
+    private NotificationService notificationService;
+
+    public NotificationController(NotificationService notificationService) {
+        this.notificationService = notificationService;
+    }
 
     @PostMapping("/create")
     public ResponseEntity<ApiResponse> createNotification(@RequestBody JsonNode userNotificationDetail,
@@ -37,28 +40,28 @@ public class NotificationController {
     }
 
     @GetMapping("/readby/{notificationId}")
-    public ResponseEntity<?> readByUserIdAndNotificationId(@PathVariable String notificationId, @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
+    public ResponseEntity<ApiResponse> readByUserIdAndNotificationId(@PathVariable String notificationId, @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
         ApiResponse response = notificationService.readByUserIdAndNotificationId(notificationId, token);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
 
     @GetMapping("/list")
-    public ResponseEntity<?> getLastXDaysNotifications(
+    public ResponseEntity<ApiResponse> getLastXDaysNotifications(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_DAYS + "") int days,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_PAGE + "") int page,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_PAGE_SIZE + "") int size,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_READ_STATUS) NotificationReadStatus status,
-            @RequestParam(required = false) String sub_type) {
+            @RequestParam(required = false) String subType) {
 
-        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(token, days, page, size, status, sub_type);
+        ApiResponse response = notificationService.getNotificationsByUserIdAndLastXDays(token, days, page, size, status, subType);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
 
     @PatchMapping("/read")
-    public ResponseEntity<?> markNotificationsAsRead(
+    public ResponseEntity<ApiResponse> markNotificationsAsRead(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestBody Map<String, Object> requestBody) {
 
@@ -69,7 +72,7 @@ public class NotificationController {
 
 
     @DeleteMapping("/delete")
-    public ResponseEntity<?> markNotificationsAsDeleted(
+    public ResponseEntity<ApiResponse> markNotificationsAsDeleted(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestBody Map<String, Object> requestBody) {
 
@@ -79,7 +82,7 @@ public class NotificationController {
     }
 
     @GetMapping("/unread/count")
-    public ResponseEntity<?> getUnreadNotificationCount(
+    public ResponseEntity<ApiResponse> getUnreadNotificationCount(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token,
             @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_DAYS + "") int days) {
 
@@ -88,7 +91,7 @@ public class NotificationController {
     }
 
     @GetMapping("/reset/unread/count")
-    public ResponseEntity<?> getResetNotificationCount(
+    public ResponseEntity<ApiResponse> getResetNotificationCount(
             @RequestHeader(Constants.X_AUTH_TOKEN) String token) {
 
         ApiResponse response = notificationService.getResetNotificationCount(token);

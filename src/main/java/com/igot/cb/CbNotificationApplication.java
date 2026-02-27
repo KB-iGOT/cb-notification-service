@@ -1,6 +1,5 @@
 package com.igot.cb;
 
-
 import com.igot.cb.util.Constants;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -16,16 +15,14 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-
-
-@ComponentScan(basePackages = "com.igot.cb")
+@ComponentScan(basePackages = { "com.igot.cb" })
 @EntityScan("com.igot.cb")
 @SpringBootApplication
 public class CbNotificationApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(CbNotificationApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(CbNotificationApplication.class, args);
+    }
 
     @Bean
     public RestTemplate restTemplate() {
