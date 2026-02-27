@@ -1114,6 +1114,10 @@ public class NotificationServiceImpl implements NotificationService {
                 Constants.TEMPLATE_ID
         );
         fieldsToRemove.forEach(resultMap::remove);
+        Object createdAtObj = resultMap.get(Constants.CREATED_AT);
+        if (createdAtObj instanceof Instant instant) {
+            resultMap.put(Constants.CREATED_AT, instant.toString());
+        }
         Object messageObj = resultMap.get("message");
 
         if (messageObj instanceof String strMessage && messageObj != null) {
