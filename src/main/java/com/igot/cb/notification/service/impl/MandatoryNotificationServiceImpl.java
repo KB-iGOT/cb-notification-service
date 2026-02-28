@@ -67,13 +67,13 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
             }
             Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
             List<Map<String, Object>> merged = fetchAndMergeNotifications(userId);
-            List<Map<String, Object>> filtered = filterNotifications(merged, fromDate, status);
-            List<Map<String, Object>> sorted = sortByCreatedAt(filtered);
-            List<Map<String, Object>> subTypeStats = buildSubTypeStats(sorted);
-            List<Map<String, Object>> bySubType = applySubTypeFilter(sorted, subType);
+            List<Map<String, Object>> sortedEligible = merged.stream()
+                    .filter(n -> isNotificationEligible(n, fromDate, status))
+                    .sorted(Comparator.comparing(n -> (Instant) n.get(CREATED_AT), Comparator.nullsLast(Comparator.reverseOrder())))
+                    .toList();
             response.setResponseCode(HttpStatus.OK);
-            response.setResult(buildPaginatedResult(bySubType, page, size, subTypeStats));
-            log.info("getMandatoryNotificationsList: completed, count={}", bySubType.size());
+            response.setResult(buildPaginatedResult(sortedEligible, subType, page, size));
+            log.info("getMandatoryNotificationsList: completed, count={}", sortedEligible.size());
         } catch (Exception e) {
             log.error("getMandatoryNotificationsList: Unexpected error - {}", e.getMessage(), e);
             updateErrorDetails(response, ERR_FETCHING_NOTIFICATION_LIST, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -90,60 +90,29 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
      */
     private List<Map<String, Object>> fetchAndMergeNotifications(String userId) {
         List<String> fields = List.of(NOTIFICATION_ID, CREATED_AT, TYPE, MESSAGE, READ, ROLE, SOURCE, CATEGORY, SUB_CATEGORY, SUB_TYPE, IS_DELETED);
-        return cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+        List<Map<String, Object>> records = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 Constants.KEYSPACE_SUNBIRD, Constants.TABLE_MANDATORY_NOTIFICATION,
                 Map.of(USER_ID, userId), fields, cbServerProperties.getMandatoryNotificationMaxFetchLimit()
         );
-    }
-
-    /**
-     * Filters notifications by date range and read status, excluding deleted records.
-     *
-     * @param notifications raw notification list
-     * @param fromDate      earliest allowed created_at instant
-     * @param status        read status filter (READ, UNREAD, or BOTH)
-     * @return filtered list of eligible notifications
-     */
-    private List<Map<String, Object>> filterNotifications(List<Map<String, Object>> notifications, Instant fromDate, NotificationReadStatus status) {
-        return notifications.stream()
-                .filter(n -> isNotificationEligible(n, fromDate, status))
-                .toList();
+        records.forEach(n -> {
+            Object fetchedDate = n.get(CREATED_AT);
+            if (!(fetchedDate instanceof Instant)) {
+                n.put(CREATED_AT, getInstant(fetchedDate));
+            }
+        });
+        return records;
     }
 
     /**
      * Checks whether a single notification passes the date, deletion, and read-status criteria.
      */
     private boolean isNotificationEligible(Map<String, Object> n, Instant fromDate, NotificationReadStatus status) {
-        Instant createdAt = getInstant(n.get(CREATED_AT));
+        Instant createdAt = (Instant) n.get(CREATED_AT);
         if (createdAt == null || createdAt.isBefore(fromDate)) return false;
         if (Boolean.TRUE.equals(n.get(IS_DELETED))) return false;
         Boolean isRead = (Boolean) n.get(READ);
         if (status == NotificationReadStatus.READ && !Boolean.TRUE.equals(isRead)) return false;
         return status != NotificationReadStatus.UNREAD || Boolean.FALSE.equals(isRead);
-    }
-
-    /**
-     * Sorts notifications by created_at in descending order (newest first), with nulls last.
-     */
-    private List<Map<String, Object>> sortByCreatedAt(List<Map<String, Object>> notifications) {
-        return notifications.stream()
-                .sorted(Comparator.comparing(
-                        n -> getInstant(n.get(CREATED_AT)),
-                        Comparator.nullsLast(Comparator.reverseOrder())
-                ))
-                .toList();
-    }
-
-    /**
-     * Sorts notifications by created_at in ascending order (oldest first), with nulls last.
-     */
-    private List<Map<String, Object>> sortByCreatedAtAscending(List<Map<String, Object>> notifications) {
-        return notifications.stream()
-                .sorted(Comparator.comparing(
-                        n -> getInstant(n.get(CREATED_AT)),
-                        Comparator.nullsLast(Comparator.naturalOrder())
-                ))
-                .toList();
     }
 
     /**
@@ -175,31 +144,29 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
     }
 
     /**
-     * Filters notifications by sub-type. If subType is blank, all notifications are returned.
-     */
-    private List<Map<String, Object>> applySubTypeFilter(List<Map<String, Object>> notifications, String subType) {
-        return notifications.stream()
-                .filter(n -> StringUtils.isBlank(subType) || subType.equalsIgnoreCase((String) n.getOrDefault(SUB_TYPE, ALL)))
-                .toList();
-    }
-
-    /**
      * Builds a paginated result map containing the current page of notifications,
-     * pagination metadata, and sub-type statistics.
+     * pagination metadata, and sub-type statistics. Computes stats and applies
+     * optional sub-type filter inline to minimize intermediate list allocations.
      *
-     * @param notifications full list after filtering and sub-type selection
+     * @param notifications full sorted and filtered list
+     * @param subType       optional sub-type filter (blank means all)
      * @param page          zero-based page index
      * @param size          page size
-     * @param subTypeStats  pre-computed sub-type statistics
      * @return result map ready to set on the ApiResponse
      */
-    private Map<String, Object> buildPaginatedResult(List<Map<String, Object>> notifications, int page, int size, List<Map<String, Object>> subTypeStats) {
-        int total = notifications.size();
-        int fromIndex = Math.min(page * size, total);
-        int toIndex = Math.min(fromIndex + size, total);
-        if (fromIndex > toIndex) fromIndex = toIndex;
+    private Map<String, Object> buildPaginatedResult(List<Map<String, Object>> notifications, String subType, int page, int size) {
+        List<Map<String, Object>> subTypeStats = buildSubTypeStats(notifications);
 
-        List<Map<String, Object>> processed = notifications.subList(fromIndex, toIndex).stream()
+        List<Map<String, Object>> source = StringUtils.isBlank(subType)
+                ? notifications
+                : notifications.stream()
+                        .filter(n -> subType.equalsIgnoreCase((String) n.getOrDefault(SUB_TYPE, ALL)))
+                        .toList();
+
+        int total = source.size();
+        List<Map<String, Object>> processed = source.stream()
+                .skip((long) page * size)
+                .limit(size)
                 .map(this::prepareNotificationResponse)
                 .toList();
 
@@ -208,7 +175,7 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
         resultMap.put(TOTAL_COUNT, total);
         resultMap.put(PAGE, page);
         resultMap.put(SIZE, size);
-        resultMap.put(HAS_NEXT_PAGE, toIndex < total);
+        resultMap.put(HAS_NEXT_PAGE, (long) (page + 1) * size < total);
         resultMap.put(SUBTYPE_STATS, subTypeStats);
         return resultMap;
     }
@@ -231,18 +198,17 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
                 return response;
             }
             List<Map<String, Object>> merged = fetchAndMergeNotifications(userId);
-            List<Map<String, Object>> filtered = filterNotifications(merged, Instant.MIN, NotificationReadStatus.UNREAD);
-            List<Map<String, Object>> sorted = sortByCreatedAtAscending(filtered);
-            if (sorted.isEmpty()) {
-                response.setResponseCode(HttpStatus.OK);
-                response.setResult(Map.of(NOTIFICATION, Collections.emptyMap()));
-                log.info("getCurrentMandatoryNotification: completed, no notifications found");
-                return response;
-            }
-            Map<String, Object> notification = prepareNotificationResponse(sorted.get(0));
+            Optional<Map<String, Object>> oldestNotification = merged.stream()
+                    .filter(n -> isNotificationEligible(n, Instant.MIN, NotificationReadStatus.UNREAD))
+                    .min(Comparator.comparing(n -> (Instant) n.get(CREATED_AT), Comparator.nullsLast(Comparator.naturalOrder())));
             response.setResponseCode(HttpStatus.OK);
-            response.setResult(Map.of(NOTIFICATION, notification));
-            log.info("getCurrentMandatoryNotification: completed");
+            if (oldestNotification.isPresent()) {
+                Map<String, Object> notification = prepareNotificationResponse(oldestNotification.get());
+                response.setResult(Map.of(NOTIFICATION, notification));
+            } else {
+                response.setResult(Map.of(NOTIFICATION, Collections.emptyMap()));
+            }
+            log.info("getCurrentMandatoryNotification: completed, found={}", oldestNotification.isPresent());
         } catch (Exception e) {
             log.error("getCurrentMandatoryNotification: Unexpected error - {}", e.getMessage(), e);
             updateErrorDetails(response, ERR_FETCHING_NOTIFICATION, HttpStatus.INTERNAL_SERVER_ERROR);
