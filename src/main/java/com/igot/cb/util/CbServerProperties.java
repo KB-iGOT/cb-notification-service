@@ -50,4 +50,7 @@ public class CbServerProperties {
   @Value("${spring.kafka.bootstrap.servers}")
   private String springKafkaBootStrapServers;
 
+  @Value("${mandatory.notification.max.fetch.limit}")
+  private int mandatoryNotificationMaxFetchLimit;
+
 }

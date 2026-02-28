@@ -465,6 +465,27 @@ public class Constants {
     public static final String ACTION = "action";
     public static final int MAX_NOTIFICATIONS_FETCH_FOR_COUNT = 10;
 
+    public static final String USER_MANDATORY_NOTIFICATION_LIST = "notification.v1.mandatory.list";
+    public static final String USER_MANDATORY_NOTIFICATION_READ = "notification.v1.mandatory.read";
+    public static final String USER_MANDATORY_NOTIFICATION_CURRENT = "notification.v1.mandatory.current";
+
+    public static final String ENDPOINT_BASE_NOTIFICATIONS = "/v1/notifications";
+    public static final String ENDPOINT_MANDATORY_LIST = "/mandatory/list";
+    public static final String ENDPOINT_MANDATORY_CURRENT = "/mandatory/current";
+    public static final String ENDPOINT_MANDATORY_READ = "/mandatory/read";
+
+    public static final String PARAM_SUB_TYPE = "sub_type";
+
+    public static final String NOTIFICATION = "notification";
+    public static final String ERR_FETCHING_NOTIFICATION_LIST = "Internal server error while fetching notification list";
+    public static final String ERR_FETCHING_NOTIFICATION = "Internal server error while fetching notification";
+    public static final String ERR_ID_AND_CREATED_AT_REQUIRED = "Both 'id' and 'createdAt' must be provided";
+    public static final String ERR_INVALID_CREATED_AT_FORMAT = "Invalid 'createdAt' format";
+    public static final String MSG_NOTIFICATION_MARKED_READ = "Notification marked as read successfully";
+    public static final String ERR_FAILED_TO_UPDATE_NOTIFICATION = "Failed to update notification";
+    public static final String ERR_UPDATING_NOTIFICATION = "Internal server error while updating notification";
+    public static final String TABLE_MANDATORY_NOTIFICATION = "mandatory_notifications";
+
     private Constants() {
     }
 }
