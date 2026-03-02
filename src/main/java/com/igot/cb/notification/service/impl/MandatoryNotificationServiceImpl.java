@@ -13,6 +13,7 @@ import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
 import io.micrometer.common.util.StringUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -249,11 +250,21 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
                 updateErrorDetails(response, ERR_INVALID_CREATED_AT_FORMAT, HttpStatus.BAD_REQUEST);
                 return response;
             }
+            Map<String, Object> compositeKey = Map.of(USER_ID, userId, CREATED_AT, createdAt);
+            List<Map<String, Object>> existing = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                    Constants.KEYSPACE_SUNBIRD, Constants.TABLE_MANDATORY_NOTIFICATION,
+                    compositeKey, Collections.singletonList(NOTIFICATION_ID), 1
+            );
+            if (CollectionUtils.isEmpty(existing)) {
+                log.warn("markMandatoryNotificationsAsRead: Notification not found for userId={}, createdAt={}", userId, createdAt);
+                updateErrorDetails(response, ERR_NOTIFICATION_NOT_FOUND, HttpStatus.NOT_FOUND);
+                return response;
+            }
             Instant now = Instant.now();
             Map<String, Object> result = cassandraOperation.updateRecordByCompositeKey(
                     Constants.KEYSPACE_SUNBIRD, Constants.TABLE_MANDATORY_NOTIFICATION,
                     Map.of(READ, true, READ_AT, now),
-                    Map.of(USER_ID, userId, CREATED_AT, createdAt)
+                    compositeKey
             );
             if (Constants.SUCCESS.equalsIgnoreCase((String) result.get(Constants.RESPONSE))) {
                 response.getParams().setStatus(Constants.SUCCESS);
@@ -261,6 +272,7 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
                 response.setResponseCode(HttpStatus.OK);
                 response.setResult(Map.of(ID, notificationId, READ, true, READ_AT, now.toString()));
                 log.info("markMandatoryNotificationsAsRead: completed");
+                decrementUnreadCount(Constants.KEYSPACE_SUNBIRD, Constants.TABLE_UNREAD_NOTIFICATION_COUNT, userId);
             } else {
                 log.error("markMandatoryNotificationsAsRead: Cassandra update failed for notificationId={}, userId={}", notificationId, userId);
                 updateErrorDetails(response, ERR_FAILED_TO_UPDATE_NOTIFICATION, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -341,5 +353,39 @@ public class MandatoryNotificationServiceImpl implements MandatoryNotificationSe
         response.getParams().setStatus(Constants.FAILED);
         response.getParams().setErrMsg(errorMessage);
         response.setResponseCode(httpStatus);
+    }
+
+    /**
+     * Decrements the unread notification count for the given user by 1.
+     * Count is never decremented below 0. If no record exists, the call is a no-op.
+     */
+    private void decrementUnreadCount(String keyspace, String table, String userId) {
+        try {
+            Map<String, Object> criteria = Map.of(USER_ID, userId);
+            List<String> fields = Collections.singletonList(COUNT);
+            List<Map<String, Object>> records = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
+                    keyspace, table, criteria, fields, 1
+            );
+            if (CollectionUtils.isEmpty(records)) {
+                log.warn("decrementUnreadCount: No count record found for user {} — skipping", userId);
+                return;
+            }
+            Map<String, Object> countRecord = records.get(0);
+            if (countRecord == null || countRecord.get(COUNT) == null) {
+                log.warn("decrementUnreadCount: No count record found for user {} — skipping", userId);
+                return;
+            }
+            int currentCount = (int) countRecord.get(COUNT);
+            if (currentCount <= 0) {
+                log.warn("decrementUnreadCount: Count is already 0 for user {} — skipping", userId);
+                return;
+            }
+            Map<String, Object> updates = new HashMap<>();
+            updates.put(COUNT, currentCount - 1);
+            updates.put(UPDATED_AT, Instant.now());
+            cassandraOperation.updateRecordByCompositeKey(keyspace, table, updates, criteria);
+        } catch (Exception e) {
+            log.error("decrementUnreadCount: Failed for user={} error={}", userId, e.getMessage(), e);
+        }
     }
 }
