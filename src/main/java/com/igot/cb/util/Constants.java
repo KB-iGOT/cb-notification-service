@@ -492,6 +492,7 @@ public class Constants {
     public static final String ERR_FETCHING_NOTIFICATION = "Internal server error while fetching notification";
     public static final String ERR_ID_AND_CREATED_AT_REQUIRED = "Both 'id' and 'createdAt' must be provided";
     public static final String ERR_INVALID_CREATED_AT_FORMAT = "Invalid 'createdAt' format";
+    public static final String ERR_NOTIFICATION_NOT_FOUND = "Notification not found for the given id and createdAt";
     public static final String MSG_NOTIFICATION_MARKED_READ = "Notification marked as read successfully";
     public static final String ERR_FAILED_TO_UPDATE_NOTIFICATION = "Failed to update notification";
     public static final String ERR_UPDATING_NOTIFICATION = "Internal server error while updating notification";
