@@ -1,7 +1,7 @@
 package com.igot.cb.notification.service;
 
 import com.igot.cb.notification.enums.NotificationReadStatus;
-import com.igot.cb.util.ApiResponse;
+import org.igot.common.ApiResponse;
 
 import java.util.Map;
 

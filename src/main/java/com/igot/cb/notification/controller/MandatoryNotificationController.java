@@ -2,7 +2,7 @@ package com.igot.cb.notification.controller;
 
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.service.MandatoryNotificationService;
-import com.igot.cb.util.ApiResponse;
+import org.igot.common.ApiResponse;
 import com.igot.cb.util.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
