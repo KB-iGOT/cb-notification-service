@@ -1,20 +1,24 @@
 package com.igot.cb.notification.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.igot.cb.notification.entity.NotificationSettingEntity;
+import com.igot.cb.notification.enums.NotificationCategory;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.enums.NotificationType;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
 import com.igot.cb.notification.service.NotificationService;
+import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import io.micrometer.common.util.StringUtils;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.EnumUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.igot.common.ApiResponse;
 import org.igot.common.auth.AccessTokenValidator;
@@ -39,13 +43,15 @@ public class NotificationServiceImpl implements NotificationService {
     private CassandraOperation cassandraOperation;
     private ObjectMapper objectMapper;
     private NotificationSettingRepository notificationSettingRepository;
-
+    private CbServerProperties cbServerProperties;
     public NotificationServiceImpl(AccessTokenValidator accessTokenValidator, CassandraOperation cassandraOperation,
-            ObjectMapper objectMapper, NotificationSettingRepository notificationSettingRepository) {
+            ObjectMapper objectMapper, NotificationSettingRepository notificationSettingRepository,
+            CbServerProperties cbServerProperties) {
         this.accessTokenValidator = accessTokenValidator;
         this.cassandraOperation = cassandraOperation;
         this.objectMapper = objectMapper;
         this.notificationSettingRepository = notificationSettingRepository;
+        this.cbServerProperties = cbServerProperties;
     }
 
     private final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
@@ -1178,5 +1184,384 @@ public class NotificationServiceImpl implements NotificationService {
         } catch (Exception e) {
             log.error("Error updating unread count for user {}: {}", userId, e.getMessage(), e);
         }
+    }
+
+    /**
+     * Validates and processes a bulk peer-validation notification request.
+     * Delegates to filtering, record building, and Cassandra persistence.
+     *
+     * @param requestBody map containing a {@code request} list of per-user notification payloads
+     * @return {@link ApiResponse} with processed, skipped, and failed counts
+     */
+    @Override
+    public ApiResponse bulkCreatePeerValidationNotifications(Map<String, Object> requestBody) {
+        log.info("NotificationService::bulkCreatePeerValidationNotifications: Start");
+        ApiResponse response = ApiResponse.createDefaultResponse(PEER_VALIDATION_BULK_CREATE);
+        try {
+            List<Map<String, Object>> requestList = (List<Map<String, Object>>) requestBody.get(REQUEST);
+            String validationError = validatePeerValidationRequest(requestList);
+            if (StringUtils.isNotBlank(validationError)) {
+                log.warn("Validation failed for peer validation request: {}", validationError);
+                updateErrorDetails(response, validationError, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+            List<Map<String, Object>> eligibleNotifications = new ArrayList<>();
+            List<Map<String, Object>> actionRecords = new ArrayList<>();
+            List<Map<String, Object>> skipped = new ArrayList<>();
+            List<Map<String, Object>> failures = new ArrayList<>();
+            filterAndBuildRecords(requestList, eligibleNotifications, actionRecords, skipped, failures);
+            List<Map<String, Object>> notifications = persistPeerValidationNotifications(eligibleNotifications, actionRecords);
+            populateBulkResponse(response, notifications, skipped, failures);
+        } catch (Exception e) {
+            log.error("Error during bulk peer validation notification creation: {}", e.getMessage(), e);
+            updateErrorDetails(response, INTERNAL_ERROR_MSG, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return response;
+    }
+
+    /**
+     * Populates the {@link ApiResponse} result with notification counts and lists
+     * for processed, skipped, and failed entries.
+     */
+    private void populateBulkResponse(ApiResponse response, List<Map<String, Object>> notifications,
+                                      List<Map<String, Object>> skipped, List<Map<String, Object>> failures) {
+        response.setResponseCode(HttpStatus.OK);
+        response.getParams().setStatus(SUCCESS);
+        if (CollectionUtils.isEmpty(notifications)) {
+            log.info("No eligible users found after filtering notification settings");
+            response.getParams().setErrMsg(NO_ELIGIBLE_USERS_MSG);
+        }
+        response.setResult(Map.of(
+                NOTIFICATIONS, notifications,
+                PROCESSED_COUNT, notifications.size(),
+                SKIPPED_COUNT, skipped.size(),
+                SKIPPED, skipped,
+                FAILED_COUNT, failures.size(),
+                FAILED_KEY, failures
+        ));
+    }
+
+    /**
+     * Persists eligible notification records and action records to Cassandra,
+     * then increments unread counts for all affected users.
+     *
+     * @return list of response entries built from the persisted notifications
+     */
+    private List<Map<String, Object>> persistPeerValidationNotifications(
+            List<Map<String, Object>> eligibleNotifications, List<Map<String, Object>> actionRecords) {
+        if (CollectionUtils.isEmpty(eligibleNotifications)) {
+            return Collections.emptyList();
+        }
+        Set<String> uniqueUserIds = new LinkedHashSet<>();
+        List<Map<String, Object>> notificationsForInsert = prepareRecordsForInsert(eligibleNotifications, uniqueUserIds);
+        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_INDIVIDUAL_NOTIFICATION, notificationsForInsert);
+        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_ACTIONS, actionRecords);
+        bulkIncrementUnreadCounts(uniqueUserIds);
+        return eligibleNotifications.stream().map(this::buildPeerValidationResponseEntry).toList();
+    }
+
+    /**
+     * Copies eligible notifications into insert-ready maps and collects unique user IDs.
+     *
+     * @param uniqueUserIds set populated with each notification's user ID as a side-effect
+     * @return mutable copies of the eligible notification maps ready for Cassandra bulk insert
+     */
+    private List<Map<String, Object>> prepareRecordsForInsert(
+            List<Map<String, Object>> eligibleNotifications, Set<String> uniqueUserIds) {
+        List<Map<String, Object>> notificationsForInsert = new ArrayList<>(eligibleNotifications.size());
+        for (Map<String, Object> notification : eligibleNotifications) {
+            uniqueUserIds.add((String) notification.get(USER_ID));
+            notificationsForInsert.add(new HashMap<>(notification));
+        }
+        return notificationsForInsert;
+    }
+
+    /**
+     * Fetches existing unread counts for the given users and upserts each count incremented by one.
+     */
+    private void bulkIncrementUnreadCounts(Set<String> userIds) {
+        Map<String, Integer> existingCounts = fetchExistingUnreadCounts(userIds);
+        List<Map<String, Object>> upsertRecords = buildUnreadCountUpsertRecords(userIds, existingCounts);
+        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_UNREAD_NOTIFICATION_COUNT, upsertRecords);
+        log.info("Bulk updated unread counts for {} users", userIds.size());
+    }
+
+    /**
+     * Queries Cassandra for the current unread-notification count of each user in the given set.
+     *
+     * @return map of userId to current unread count (absent entries default to 0)
+     */
+    private Map<String, Integer> fetchExistingUnreadCounts(Set<String> userIds) {
+        List<Map<String, Object>> countRecords = cassandraOperation.getRecordsByProperties(
+                KEYSPACE_SUNBIRD, TABLE_UNREAD_NOTIFICATION_COUNT,
+                Map.of(USER_ID, new ArrayList<>(userIds)),
+                List.of(USER_ID, COUNT),
+                userIds.size()
+        );
+        Map<String, Integer> existingCounts = new HashMap<>();
+        for (Map<String, Object> countEntry : countRecords) {
+            String uid = (String) countEntry.get(USER_ID);
+            Object countObj = countEntry.get(COUNT);
+            if (countObj instanceof Number num) {
+                existingCounts.put(uid, num.intValue());
+            }
+        }
+        return existingCounts;
+    }
+
+    /**
+     * Builds upsert records by incrementing each user's existing unread count by one.
+     *
+     * @param existingCounts current counts per user; missing entries default to 0
+     * @return list of records ready for Cassandra bulk upsert
+     */
+    private List<Map<String, Object>> buildUnreadCountUpsertRecords(
+            Set<String> userIds, Map<String, Integer> existingCounts) {
+        Instant now = Instant.now();
+        List<Map<String, Object>> upsertRecords = new ArrayList<>(userIds.size());
+        for (String uid : userIds) {
+            int newCount = existingCounts.getOrDefault(uid, 0) + 1;
+            Map<String, Object> countRecord = new LinkedHashMap<>();
+            countRecord.put(USER_ID, uid);
+            countRecord.put(COUNT, newCount);
+            countRecord.put(UPDATED_AT, now);
+            upsertRecords.add(countRecord);
+        }
+        return upsertRecords;
+    }
+
+    /**
+     * Strips internal fields ({@code is_deleted}, {@code updated_at}, {@code read_at}) from a
+     * notification record and formats {@code created_at} as an ISO-8601 string for the API response.
+     */
+    private Map<String, Object> buildPeerValidationResponseEntry(Map<String, Object> notificationRecord) {
+        Map<String, Object> response = new HashMap<>(notificationRecord);
+        response.remove(IS_DELETED);
+        response.remove(UPDATED_AT);
+        response.remove(READ_AT);
+        Object createdAt = response.get(CREATED_AT);
+        if (createdAt instanceof Instant instant) {
+            response.put(CREATED_AT, instant.toString());
+        }
+        return response;
+    }
+
+    /**
+     * Iterates the request list, skips users whose notification type is disabled,
+     * and builds notification and action records for eligible users.
+     * Failures during record construction are collected separately.
+     */
+    private void filterAndBuildRecords(
+            List<Map<String, Object>> requestList,
+            List<Map<String, Object>> eligibleNotifications,
+            List<Map<String, Object>> actionRecords,
+            List<Map<String, Object>> skipped,
+            List<Map<String, Object>> failures) {
+        Map<String, Map<String, NotificationSettingEntity>> userSettingsMap =
+                cbServerProperties.isPeerValidationNotificationSettingCheckEnabled()
+                        ? fetchUserNotificationSettings(requestList)
+                        : Collections.emptyMap();
+        for (Map<String, Object> request : requestList) {
+            String userId = (String) request.get(USER_ID);
+            String notificationType = (String) request.get(TYPE);
+            if (isNotificationDisabled(userSettingsMap, userId, notificationType)) {
+                log.info("NotificationType '{}' is disabled for user '{}', skipping", notificationType, userId);
+                skipped.add(Map.of(USER_ID, userId, TYPE, notificationType,
+                        SUB_CATEGORY, request.get(SUB_CATEGORY), REASON, NOTIFICATION_TYPE_DISABLED));
+                continue;
+            }
+            buildRecordsForRequest(request, userId, notificationType, eligibleNotifications, actionRecords, failures);
+        }
+        log.info("Built {} notification records, {} skipped, {} failures",
+                eligibleNotifications.size(), skipped.size(), failures.size());
+    }
+
+    /**
+     * Returns {@code true} when the user has an explicit disabled setting for the given notification type.
+     */
+    private boolean isNotificationDisabled(
+            Map<String, Map<String, NotificationSettingEntity>> userSettingsMap,
+            String userId, String notificationType) {
+        return Optional.ofNullable(userSettingsMap.get(userId))
+                .map(userSettings -> userSettings.get(notificationType))
+                .map(setting -> !setting.isEnabled())
+                .orElse(false);
+    }
+
+    /**
+     * Builds one notification record and one action record for a single user request.
+     * On failure, adds an error entry to {@code failures} instead of propagating the exception.
+     */
+    private void buildRecordsForRequest(
+            Map<String, Object> request, String userId, String notificationType,
+            List<Map<String, Object>> eligibleNotifications,
+            List<Map<String, Object>> actionRecords,
+            List<Map<String, Object>> failures) {
+        try {
+            Map<String, Object> message = (Map<String, Object>) request.get(MESSAGE);
+            List<Map<String, Object>> dataList = (List<Map<String, Object>>) message.get(DATA);
+            Map<String, Object> surveyData = dataList.get(0);
+            Instant now = Instant.now();
+            String notificationId = java.util.UUID.randomUUID().toString();
+
+            Map<String, Object> notificationRecord = buildNotificationRecord(
+                    notificationId, userId, notificationType, request, now);
+            Map<String, Object> actionRecord = buildActionRecord(
+                    notificationId, userId, request, surveyData, now);
+
+            eligibleNotifications.add(notificationRecord);
+            actionRecords.add(actionRecord);
+        } catch (Exception e) {
+            log.error("Failed to build records for user '{}': {}", userId, e.getMessage(), e);
+            failures.add(Map.of(USER_ID, userId,
+                    ERROR_KEY, ObjectUtils.defaultIfNull(e.getMessage(), e.getClass().getSimpleName())));
+        }
+    }
+
+    /**
+     * Constructs the Cassandra-ready notification map, serializing the {@code message}
+     * field to a JSON string when it is not already a string.
+     */
+    private Map<String, Object> buildNotificationRecord(
+            String notificationId, String userId, String notificationType,
+            Map<String, Object> request, Instant now)
+            throws JsonProcessingException {
+        Map<String, Object> notificationMap = new HashMap<>();
+        notificationMap.put(NOTIFICATION_ID, notificationId);
+        notificationMap.put(USER_ID, userId);
+        notificationMap.put(TYPE, notificationType);
+        notificationMap.put(CATEGORY, request.get(CATEGORY));
+        notificationMap.put(SUB_TYPE, request.get(SUB_TYPE));
+        notificationMap.put(SOURCE, request.get(SOURCE));
+        notificationMap.put(SUB_CATEGORY, request.get(SUB_CATEGORY));
+        Object messageObj = request.get(MESSAGE);
+        if (messageObj instanceof String) {
+            notificationMap.put(MESSAGE, messageObj);
+        } else if (messageObj != null) {
+            notificationMap.put(MESSAGE, objectMapper.writeValueAsString(messageObj));
+        }
+        notificationMap.put(CREATED_AT, now);
+        notificationMap.put(IS_DELETED, false);
+        notificationMap.put(READ, false);
+        notificationMap.put(READ_AT, null);
+        return notificationMap;
+    }
+
+    /**
+     * Constructs the peer-validation action record, parsing the survey end-date and
+     * serializing survey metadata to JSON for Cassandra storage.
+     */
+    private Map<String, Object> buildActionRecord(
+            String notificationId, String userId, Map<String, Object> request,
+            Map<String, Object> surveyData, Instant now)
+            throws JsonProcessingException {
+        Instant surveyEndDate = Instant.parse((String) surveyData.get(SURVEY_END_DATE_KEY));
+        Map<String, Object> actionMap = new HashMap<>();
+        actionMap.put(NOTIFICATION_ID, notificationId);
+        actionMap.put(USER_ID, userId);
+        actionMap.put(SUB_CATEGORY, request.get(SUB_CATEGORY));
+        actionMap.put(SURVEY_END_DATE, surveyEndDate);
+        actionMap.put(ACTION_AT, null);
+        actionMap.put(METADATA, objectMapper.writeValueAsString(surveyData));
+        actionMap.put(CREATED_AT, now);
+
+        return actionMap;
+    }
+
+    /**
+     * Loads notification settings for all distinct user-IDs and notification types present in
+     * the request list, returning them indexed as {@code userId → notificationType → setting}.
+     */
+    private Map<String, Map<String, NotificationSettingEntity>> fetchUserNotificationSettings(
+            List<Map<String, Object>> requestList) {
+        Set<String> distinctUserIds = new HashSet<>();
+        Set<String> distinctNotificationTypes = new HashSet<>();
+        for (Map<String, Object> req : requestList) {
+            distinctUserIds.add((String) req.get(USER_ID));
+            distinctNotificationTypes.add((String) req.get(TYPE));
+        }
+        List<NotificationSettingEntity> allSettings = notificationSettingRepository
+                .findByUserIdInAndNotificationTypeInAndIsDeletedFalse(
+                        new ArrayList<>(distinctUserIds), new ArrayList<>(distinctNotificationTypes));
+        return allSettings.stream().collect(Collectors.groupingBy(
+                NotificationSettingEntity::getUserId,
+                Collectors.toMap(NotificationSettingEntity::getNotificationType, s -> s)));
+    }
+
+
+    /**
+     * Validates the request list for nullability, size limits, and per-entry field constraints.
+     *
+     * @return an error message string if invalid, or {@code null} if valid
+     */
+    private String validatePeerValidationRequest(List<Map<String, Object>> requestList) {
+        if (CollectionUtils.isEmpty(requestList)) {
+            log.warn(INVALID_REQUEST_ERR_MSG, requestList);
+            return INVALID_PAYLOAD_ERR_MSG;
+        }
+        int limit = cbServerProperties.getPeerValidationBulkUserNotificationLimit();
+        if (requestList.size() > limit) {
+            log.warn("Too many notifications in request: {}", requestList.size());
+            return String.format(ERR_TOO_MANY_USERS_FMT, limit);
+        }
+        for (Map<String, Object> notificationRequest : requestList) {
+            String error = validateSingleNotificationRequest(notificationRequest);
+            if (StringUtils.isNotBlank(error)) {
+                return error;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validates all required fields of a single notification request entry, including
+     * enum membership for category/sub-category and ISO-8601 format for survey end-date.
+     *
+     * @return an error message string if a field is missing or invalid, otherwise {@code null}
+     */
+    private String validateSingleNotificationRequest(Map<String, Object> request) {
+        String userId = Objects.toString(request.get(USER_ID), null);
+        if (StringUtils.isBlank(userId)) return ERR_USER_ID_REQUIRED;
+
+        String type = Objects.toString(request.get(TYPE), null);
+        if (StringUtils.isBlank(type)) return ERR_TYPE_REQUIRED;
+
+        String categoryStr = Objects.toString(request.get(CATEGORY), null);
+        if (StringUtils.isBlank(categoryStr)) return ERR_CATEGORY_REQUIRED;
+        if (!EnumUtils.isValidEnum(NotificationCategory.class, categoryStr)) {
+            return String.format(ERR_INVALID_CATEGORY_FMT, categoryStr);
+        }
+
+        String subCategoryStr = Objects.toString(request.get(SUB_CATEGORY), null);
+        if (StringUtils.isBlank(subCategoryStr)) return ERR_SUB_CATEGORY_REQUIRED;
+        if (!EnumUtils.isValidEnum(NotificationSubCategory.class, subCategoryStr)) {
+            return String.format(ERR_INVALID_SUB_CATEGORY_FMT, subCategoryStr);
+        }
+
+        String subType = Objects.toString(request.get(SUB_TYPE), null);
+        if (StringUtils.isBlank(subType)) return ERR_SUB_TYPE_REQUIRED;
+
+        String source = Objects.toString(request.get(SOURCE), null);
+        if (StringUtils.isBlank(source)) return ERR_SOURCE_REQUIRED;
+
+        Object messageObj = request.get(MESSAGE);
+        if (!(messageObj instanceof Map)) return ERR_MESSAGE_REQUIRED;
+        Map<String, Object> message = (Map<String, Object>) messageObj;
+
+        Object dataObj = message.get(DATA);
+        if (!(dataObj instanceof List<?> dataList) || dataList.isEmpty()) return ERR_MESSAGE_DATA_REQUIRED;
+        Object firstEntry = dataList.get(0);
+        if (!(firstEntry instanceof Map)) return ERR_MESSAGE_DATA_REQUIRED;
+        Map<String, Object> surveyData = (Map<String, Object>) firstEntry;
+
+        String surveyEndDateStr = Objects.toString(surveyData.get(SURVEY_END_DATE_KEY), null);
+        if (StringUtils.isBlank(surveyEndDateStr)) return ERR_SURVEY_END_DATE_REQUIRED;
+        try {
+            Instant.parse(surveyEndDateStr);
+        } catch (Exception e) {
+            log.warn("Invalid surveyEndDate format: {}", surveyEndDateStr);
+            return ERR_SURVEY_END_DATE_FORMAT;
+        }
+        return null;
     }
 }

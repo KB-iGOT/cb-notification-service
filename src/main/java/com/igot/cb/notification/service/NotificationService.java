@@ -26,5 +26,12 @@ public interface NotificationService {
 
     ApiResponse getResetNotificationCount(String token);
 
+    /**
+     * Creates bulk peer-validation notifications for the given request payload.
+     *
+     * @param requestBody map containing a {@code request} list of per-user notification payloads
+     * @return {@link ApiResponse} with processed, skipped, and failed counts along with notification IDs
+     */
+    ApiResponse bulkCreatePeerValidationNotifications(Map<String, Object> requestBody);
 
 }

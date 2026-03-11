@@ -15,4 +15,5 @@ public interface NotificationSettingRepository extends JpaRepository<Notificatio
 
     Optional<NotificationSettingEntity> findByUserIdAndNotificationTypeAndIsDeletedFalse(String userId, String notificationType);
 
+    List<NotificationSettingEntity> findByUserIdInAndNotificationTypeInAndIsDeletedFalse(List<String> userIds, List<String> notificationTypes);
 }

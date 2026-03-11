@@ -476,6 +476,42 @@ public class Constants {
     public static final String INVALID_REQUEST_ERR_MSG = "Missing or invalid 'request' node: {}";
     public static final String PARSE_ERROR = "PARSE_ERROR";
 
+    public static final String TABLE_PEER_VALIDATION_ACTIONS = "peer_validation_actions";
+    public static final String PEER_VALIDATION_BULK_CREATE = "notification.v1.bulk.create.peervalidation";
+    public static final String BULK_CREATE_PEER_VALIDATION_ENDPOINT = "/bulk/create/peervalidation";
+    public static final String PEER_VALIDATION_PENDING_LIST = "notification.v1.peervalidation.list";
+    public static final String PEER_VALIDATION_LIST_ENDPOINT = "/peervalidation/list";
+    public static final String SURVEY_END_DATE = "survey_end_date";
+    public static final String SURVEY_END_DATE_KEY = "surveyEndDate";
+    public static final String ACTION_AT = "action_at";
+    public static final String METADATA = "metadata";
+    public static final String ERR_TOO_MANY_USERS_FMT = "Cannot send notifications to more than %d users in a single request";
+    public static final String ERR_USER_ID_REQUIRED = "'user_id' is required for each notification";
+    public static final String ERR_TYPE_REQUIRED = "'type' is required for each notification";
+    public static final String ERR_CATEGORY_REQUIRED = "'category' is required for each notification";
+    public static final String ERR_SUB_TYPE_REQUIRED = "'sub_type' is required for each notification";
+    public static final String ERR_SOURCE_REQUIRED = "'source' is required for each notification";
+    public static final String ERR_SUB_CATEGORY_REQUIRED = "'sub_category' is required for each notification";
+    public static final String ERR_INVALID_CATEGORY_FMT = "Invalid 'category' value: '%s'. Must be a valid NotificationCategory";
+    public static final String ERR_INVALID_SUB_CATEGORY_FMT = "Invalid 'sub_category' value: '%s'. Must be a valid NotificationSubCategory";
+    public static final String ERR_MESSAGE_REQUIRED = "'message' must be a valid object with 'data' array containing survey information";
+    public static final String ERR_MESSAGE_DATA_REQUIRED = "'message.data' must be a non-empty array with survey information";
+    public static final String ERR_SURVEY_END_DATE_REQUIRED = "'surveyEndDate' is required in message.data for each notification";
+    public static final String ERR_SURVEY_END_DATE_FORMAT = "'surveyEndDate' must be in ISO-8601 format";
+    public static final String IS_EXPIRED = "isExpired";
+    public static final String NEXT_MARKER = "nextMarker";
+    public static final String SKIPPED = "skipped";
+    public static final String SKIPPED_COUNT = "skipped_count";
+    public static final String PROCESSED_COUNT = "processed_count";
+    public static final String FAILED_KEY = "failed";
+    public static final String FAILED_COUNT = "failed_count";
+    public static final String ERROR_KEY = "error";
+    public static final String REASON = "reason";
+    public static final String NOTIFICATION_TYPE_DISABLED = "notification_type_disabled";
+    public static final String NO_ELIGIBLE_USERS_MSG = "No eligible users for notifications";
+    public static final String VER = "ver";
+    public static final String TS = "ts";
+
     private Constants() {
     }
 }

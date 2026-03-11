@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -99,4 +100,17 @@ public class NotificationController {
     }
 
 
+    @PostMapping(Constants.BULK_CREATE_PEER_VALIDATION_ENDPOINT)
+    public ResponseEntity<Map<String, Object>> createBulkPeerValidationNotification(
+            @RequestBody Map<String, Object> requestBody) {
+        ApiResponse apiResponse = notificationService.bulkCreatePeerValidationNotifications(requestBody);
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put(ID, apiResponse.getId());
+        responseBody.put(VER, apiResponse.getVer());
+        responseBody.put(TS, apiResponse.getTs());
+        responseBody.put(PARAMS, apiResponse.getParams());
+        responseBody.put(RESPONSE_CODE, apiResponse.getResponseCode());
+        responseBody.put(RESULT, apiResponse.getResult());
+        return new ResponseEntity<>(responseBody, apiResponse.getResponseCode());
+    }
 }

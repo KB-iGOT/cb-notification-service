@@ -47,4 +47,9 @@ public class CbServerProperties {
   @Value("${spring.kafka.bootstrap.servers}")
   private String springKafkaBootStrapServers;
 
+  @Value("${peervalidation.bulk.user.notification.limit}")
+  private int peerValidationBulkUserNotificationLimit;
+
+  @Value("${peervalidation.notification.setting.check.enabled}")
+  private boolean peerValidationNotificationSettingCheckEnabled;
 }
