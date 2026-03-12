@@ -1444,6 +1444,7 @@ public class NotificationServiceImpl implements NotificationService {
         notificationMap.put(IS_DELETED, false);
         notificationMap.put(READ, false);
         notificationMap.put(READ_AT, null);
+        notificationMap.put(STATUS, STATUS_PENDING);
         return notificationMap;
     }
 
@@ -1464,6 +1465,7 @@ public class NotificationServiceImpl implements NotificationService {
         actionMap.put(ACTION_AT, null);
         actionMap.put(METADATA, objectMapper.writeValueAsString(surveyData));
         actionMap.put(CREATED_AT, now);
+        actionMap.put(STATUS, STATUS_PENDING);
 
         return actionMap;
     }

@@ -313,8 +313,9 @@ class BulkPeerValidationNotificationTest {
             assertFalse(notif.containsKey(IS_DELETED));
             assertFalse(notif.containsKey(UPDATED_AT));
             assertFalse(notif.containsKey(READ_AT));
+            assertEquals(STATUS_PENDING, notif.get(STATUS));
             verify(cassandraOperation).insertBulkRecord(
-                    eq(KEYSPACE_SUNBIRD), eq(TABLE_INDIVIDUAL_NOTIFICATION), anyList());
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyList());
             verify(cassandraOperation).insertBulkRecord(
                     eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_ACTIONS), anyList());
             verify(cassandraOperation).getRecordsByProperties(
@@ -358,11 +359,12 @@ class BulkPeerValidationNotificationTest {
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<Map<String, Object>>> captor = ArgumentCaptor.forClass(List.class);
             verify(cassandraOperation).insertBulkRecord(
-                    eq(KEYSPACE_SUNBIRD), eq(TABLE_INDIVIDUAL_NOTIFICATION), captor.capture());
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), captor.capture());
             List<Map<String, Object>> inserted = captor.getValue();
             assertEquals(1, inserted.size());
             Object messageVal = inserted.get(0).get(MESSAGE);
             assertInstanceOf(String.class, messageVal, "message should be serialized to JSON string for Cassandra");
+            assertEquals(STATUS_PENDING, inserted.get(0).get(STATUS));
         }
 
         @Test
@@ -385,6 +387,7 @@ class BulkPeerValidationNotificationTest {
             assertInstanceOf(String.class, action.get(METADATA));
             assertTrue(((String) action.get(METADATA)).contains("survey-123"));
             assertNull(action.get(ACTION_AT), "action_at should be null initially");
+            assertEquals(STATUS_PENDING, action.get(STATUS));
         }
 
         @Test
@@ -528,7 +531,7 @@ class BulkPeerValidationNotificationTest {
         @DisplayName("cassandra bulk insert throws → INTERNAL_SERVER_ERROR")
         void cassandraInsertThrows_internalError() {
             when(cassandraOperation.insertBulkRecord(
-                    eq(KEYSPACE_SUNBIRD), eq(TABLE_INDIVIDUAL_NOTIFICATION), anyList()))
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyList()))
                     .thenThrow(new RuntimeException("Cassandra timeout"));
             ApiResponse res = notificationService.bulkCreatePeerValidationNotifications(
                     wrapRequestBody(List.of(buildValidRequest(USER_1))));

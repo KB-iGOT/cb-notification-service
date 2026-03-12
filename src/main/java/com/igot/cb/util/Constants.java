@@ -83,6 +83,7 @@ public class Constants {
     public static final String CONTENT = "content";
     public static final String LIVE = "Live";
     public static final String STATUS = "status";
+    public static final String STATUS_PENDING = "PENDING";
     public static final String NAME = "name";
     public static final String COMPETENCIES_V5 = "competencies_v5";
     public static final String AVG_RATING = "avgRating";
