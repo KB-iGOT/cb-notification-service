@@ -1254,7 +1254,7 @@ public class NotificationServiceImpl implements NotificationService {
         }
         Set<String> uniqueUserIds = new LinkedHashSet<>();
         List<Map<String, Object>> notificationsForInsert = prepareRecordsForInsert(eligibleNotifications, uniqueUserIds);
-        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_INDIVIDUAL_NOTIFICATION, notificationsForInsert);
+        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION, notificationsForInsert);
         cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_ACTIONS, actionRecords);
         bulkIncrementUnreadCounts(uniqueUserIds);
         return eligibleNotifications.stream().map(this::buildPeerValidationResponseEntry).toList();
