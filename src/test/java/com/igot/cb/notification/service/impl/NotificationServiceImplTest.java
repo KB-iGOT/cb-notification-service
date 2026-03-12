@@ -1967,4 +1967,148 @@ class NotificationServiceImplTest {
         Map<String, Object> finalResult = (Map<String, Object>) response.getResult();
         assertEquals(targetNotifications.size(), ((List<?>) finalResult.get("notifications")).size());
     }
+    
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_Success() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        when(cassandraOperation.updateRecord(eq(KEYSPACE_SUNBIRD), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(1)).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), argThat(map -> "SUBMITTED".equals(map.get(STATUS))), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)));
+        verify(cassandraOperation, times(1)).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), argThat(map -> "SUBMITTED".equals(map.get(STATUS))), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)));
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_AlreadySubmitted_PeerRecord() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_AlreadySubmitted_UserNotification() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_PeerRecordNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_UserNotificationNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_InvalidSubCategory() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_REVIEW_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).getRecordsByProperties(anyString(), anyString(), anyMap(), any(), anyInt());
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_InvalidTimestampFormat() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "invalid-timestamp";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordExists_NotSubmitted() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(2)).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordAlreadySubmitted() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_BothUpdatesSucceed() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(List.of(Map.of(STATUS, "PENDING")));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(List.of(Map.of(STATUS, "PENDING")));
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(2)).updateRecord(eq(KEYSPACE_SUNBIRD), anyString(), argThat(map -> "SUBMITTED".equals(map.get(STATUS)) && map.containsKey("updated_at")), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_WithNullValues() {
+        String userId = null;
+        String notificationId = null;
+        String createdAt = null;
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
 }

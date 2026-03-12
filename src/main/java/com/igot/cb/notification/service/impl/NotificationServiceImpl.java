@@ -29,6 +29,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -1711,5 +1712,126 @@ public class NotificationServiceImpl implements NotificationService {
         resultMap.put(SIZE, size);
         resultMap.put(HAS_NEXT_PAGE, toIndex < total);
         return resultMap;
+    }
+
+    /**
+     * Updates the status of peer validation records to SUBMITTED in both user_notification
+     * and peer_validation tables based on Kafka event.
+     * <p>
+     * <strong>Note:</strong> Only PEER_EVALUATION_ASSIGNED submissions are supported.
+     * Other sub-categories will be rejected.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      the created_at timestamp (ISO-8601 string)
+     * @param subCategory    the sub-category (must be PEER_EVALUATION_ASSIGNED)
+     */
+    @Override
+    public void updatePeerValidationStatusToSubmitted(String userId, String notificationId, String createdAt, String subCategory) {
+        log.info("Updating peer validation status to SUBMITTED for user: {}, notificationId: {}, subCategory: {}",
+                userId, notificationId, subCategory);
+        try {
+            if (!SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                log.warn("Invalid subCategory '{}' for submission. Only PEER_EVALUATION_ASSIGNED is supported.", subCategory);
+                return;
+            }
+            Instant createdAtInstant = Instant.parse(createdAt);
+            if (validateRecordExistsAndNotSubmitted(
+                    Constants.TABLE_PEER_VALIDATION_REQUESTS,
+                    Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId),
+                    "Peer validation record", notificationId)) {
+                return;
+            }
+            if (validateRecordExistsAndNotSubmitted(
+                    Constants.TABLE_USER_NOTIFICATION,
+                    Map.of(USER_ID, userId, CREATED_AT, createdAtInstant),
+                    "User notification", notificationId)) {
+                return;
+            }
+            updatePeerValidationTable(userId, notificationId);
+            updateUserNotificationTable(userId, createdAtInstant);
+            log.info("Successfully completed status update to SUBMITTED for notificationId: {}", notificationId);
+        } catch (DateTimeParseException e) {
+            log.error("Invalid createdAt timestamp format '{}' for notificationId: {}", createdAt, notificationId, e);
+        } catch (Exception e) {
+            log.error("Error updating peer validation status to SUBMITTED for notificationId {}: {}",
+                    notificationId, e.getMessage(), e);
+        }
+    }
+
+
+    /**
+     * Validates that a record exists in the specified table and is not already submitted.
+     *
+     * @param tableName      the Cassandra table name
+     * @param queryParams    the query parameters (composite key)
+     * @param recordType     description of the record type for logging
+     * @param notificationId the notification ID for logging
+     * @return true if record exists and not submitted, false otherwise
+     */
+    private boolean validateRecordExistsAndNotSubmitted(String tableName, Map<String, Object> queryParams,
+                                                          String recordType, String notificationId) {
+        List<Map<String, Object>> records = cassandraOperation.getRecordsByProperties(
+                Constants.KEYSPACE_SUNBIRD,
+                tableName,
+                queryParams,
+                List.of(STATUS),
+                1
+        );
+        if (CollectionUtils.isEmpty(records)) {
+            log.error("{} not found for query: {}", recordType, queryParams);
+            return true;
+        }
+        String status = (String) records.get(0).get(STATUS);
+        if (Constants.STATUS_SUBMITTED.equalsIgnoreCase(status)) {
+            log.info("{} already marked as SUBMITTED for notificationId: {}, skipping update",
+                    recordType, notificationId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Updates the status to SUBMITTED in the peer_validation_requests table.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     */
+    private void updatePeerValidationTable(String userId, String notificationId) {
+        Map<String, Object> updateAttributes = Map.of(
+                STATUS, Constants.STATUS_SUBMITTED,
+                UPDATED_AT, Instant.now()
+        );
+        Map<String, Object> compositeKey = Map.of(
+                USER_ID, userId,
+                NOTIFICATION_ID, notificationId
+        );
+        cassandraOperation.updateRecord(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_PEER_VALIDATION_REQUESTS,
+                updateAttributes,
+                compositeKey
+        );
+    }
+
+    /**
+     * Updates the status to SUBMITTED in the user_notification table.
+     *
+     * @param userId    the user ID
+     * @param createdAt the created_at timestamp
+     */
+    private void updateUserNotificationTable(String userId, Instant createdAt) {
+        Map<String, Object> updateAttributes = Map.of(STATUS, Constants.STATUS_SUBMITTED,
+                UPDATED_AT, Instant.now());
+        Map<String, Object> compositeKey = Map.of(
+                USER_ID, userId,
+                CREATED_AT, createdAt
+        );
+        cassandraOperation.updateRecord(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_USER_NOTIFICATION,
+                updateAttributes,
+                compositeKey
+        );
     }
 }

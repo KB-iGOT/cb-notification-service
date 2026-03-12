@@ -47,4 +47,14 @@ public interface NotificationService {
      */
     ApiResponse getPeerValidationNotifications(String token, String subType, int days, int page, int size);
 
+    /**
+     * Updates the status of peer validation records to SUBMITTED based on Kafka event.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      the created_at timestamp of the record
+     * @param subCategory    the sub-category (PEER_EVALUATION_ASSIGNED or PEER_REVIEW_ASSIGNED)
+     */
+    void updatePeerValidationStatusToSubmitted(String userId, String notificationId, String createdAt, String subCategory);
+
 }

@@ -55,4 +55,10 @@ public class CbServerProperties {
 
   @Value("${peervalidation.list.max.fetch}")
   private int peerValidationListMaxFetch;
+
+  @Value("${kafka.topic.peer.validation.status}")
+  private String kafkaTopicPeerValidationStatus;
+
+  @Value("${kafka.consumer.peer.validation.group-id}")
+  private String kafkaConsumerPeerValidationGroupId;
 }
