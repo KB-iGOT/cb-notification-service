@@ -517,6 +517,7 @@ public class Constants {
     public static final String TABLE_PEER_VALIDATION_REVIEWS = "peer_validation_reviews";
     public static final String SUB_CATEGORY_PEER_EVALUATION_ASSIGNED = "PEER_EVALUATION_ASSIGNED";
     public static final String SUB_CATEGORY_PEER_REVIEW_ASSIGNED = "PEER_REVIEW_ASSIGNED";
+    public static final String STATUS_SUBMITTED = "SUBMITTED";
 
     private Constants() {
     }

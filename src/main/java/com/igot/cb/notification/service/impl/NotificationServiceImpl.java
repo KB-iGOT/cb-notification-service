@@ -1590,7 +1590,7 @@ public class NotificationServiceImpl implements NotificationService {
             Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
 
             List<Map<String, Object>> records = fetchPeerValidationRecords(tableName, userId, maxFetch);
-            List<Map<String, Object>> filtered = filterSortAndLimit(records, fromDate, maxFetch);
+            List<Map<String, Object>> filtered = filterSortAndLimit(records, fromDate);
 
             int total = filtered.size();
             int fromIndex = Math.min(page * size, total);
@@ -1640,20 +1640,22 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     /**
-     * Retains only records within the {@code fromDate} window, sorts them newest-first,
-     * and caps the list at {@code maxFetch} entries.
+     * Retains only records within the {@code fromDate} window, excludes SUBMITTED status, and sorts them newest-first.
      */
     private List<Map<String, Object>> filterSortAndLimit(
-            List<Map<String, Object>> records, Instant fromDate, int maxFetch) {
+            List<Map<String, Object>> records, Instant fromDate) {
         return records.stream()
                 .filter(r -> {
                     Instant createdAt = getInstant(r.get(CREATED_AT));
-                    return ObjectUtils.isNotEmpty(createdAt) && !createdAt.isBefore(fromDate);
+                    if (ObjectUtils.isEmpty(createdAt) || createdAt.isBefore(fromDate)) {
+                        return false;
+                    }
+                    String status = (String) r.get(STATUS);
+                    return !Constants.STATUS_SUBMITTED.equalsIgnoreCase(status);
                 })
                 .sorted(Comparator.comparing(
                         r -> getInstant(r.get(CREATED_AT)),
                         Comparator.reverseOrder()))
-                .limit(maxFetch)
                 .toList();
     }
 
