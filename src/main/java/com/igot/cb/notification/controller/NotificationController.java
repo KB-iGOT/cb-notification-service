@@ -113,4 +113,24 @@ public class NotificationController {
         responseBody.put(RESULT, apiResponse.getResult());
         return new ResponseEntity<>(responseBody, apiResponse.getResponseCode());
     }
+
+    @GetMapping(Constants.PEER_VALIDATION_LIST_ENDPOINT)
+    public ResponseEntity<Map<String, Object>> getPeerValidationNotifications(
+            @RequestHeader(Constants.X_AUTH_TOKEN) String token,
+            @RequestParam String subType,
+            @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_DAYS + "") int days,
+            @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_PAGE + "") int page,
+            @RequestParam(defaultValue = Constants.DEFAULT_NOTIFICATION_PAGE_SIZE + "") int size) {
+
+        ApiResponse apiResponse = notificationService.getPeerValidationNotifications(token, subType, days, page, size);
+        Map<String, Object> responseBody = new LinkedHashMap<>();
+        responseBody.put(ID, apiResponse.getId());
+        responseBody.put(VER, apiResponse.getVer());
+        responseBody.put(TS, apiResponse.getTs());
+        responseBody.put(PARAMS, apiResponse.getParams());
+        responseBody.put(RESPONSE_CODE, apiResponse.getResponseCode());
+        responseBody.put(RESULT, apiResponse.getResult());
+        return new ResponseEntity<>(responseBody, apiResponse.getResponseCode());
+    }
+
 }

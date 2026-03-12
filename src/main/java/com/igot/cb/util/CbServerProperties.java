@@ -52,4 +52,7 @@ public class CbServerProperties {
 
   @Value("${peervalidation.notification.setting.check.enabled}")
   private boolean peerValidationNotificationSettingCheckEnabled;
+
+  @Value("${peervalidation.list.max.fetch}")
+  private int peerValidationListMaxFetch;
 }

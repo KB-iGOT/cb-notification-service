@@ -512,6 +512,11 @@ public class Constants {
     public static final String NO_ELIGIBLE_USERS_MSG = "No eligible users for notifications";
     public static final String VER = "ver";
     public static final String TS = "ts";
+    public static final String PEER_VALIDATION_LIST_API_ID = "notification.v1.peervalidation.subtype.list";
+    public static final String TABLE_PEER_VALIDATION_REQUESTS = "peer_validation_requests";
+    public static final String TABLE_PEER_VALIDATION_REVIEWS = "peer_validation_reviews";
+    public static final String SUB_CATEGORY_PEER_EVALUATION_ASSIGNED = "PEER_EVALUATION_ASSIGNED";
+    public static final String SUB_CATEGORY_PEER_REVIEW_ASSIGNED = "PEER_REVIEW_ASSIGNED";
 
     private Constants() {
     }

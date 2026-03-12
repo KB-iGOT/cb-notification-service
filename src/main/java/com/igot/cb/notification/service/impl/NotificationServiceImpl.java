@@ -1255,7 +1255,7 @@ public class NotificationServiceImpl implements NotificationService {
         Set<String> uniqueUserIds = new LinkedHashSet<>();
         List<Map<String, Object>> notificationsForInsert = prepareRecordsForInsert(eligibleNotifications, uniqueUserIds);
         cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION, notificationsForInsert);
-        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_ACTIONS, actionRecords);
+        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_REQUESTS, actionRecords);
         bulkIncrementUnreadCounts(uniqueUserIds);
         return eligibleNotifications.stream().map(this::buildPeerValidationResponseEntry).toList();
     }
@@ -1565,5 +1565,149 @@ public class NotificationServiceImpl implements NotificationService {
             return ERR_SURVEY_END_DATE_FORMAT;
         }
         return null;
+    }
+
+    @Override
+    public ApiResponse getPeerValidationNotifications(String authToken, String subType, int days, int page, int size) {
+        log.info("NotificationService::getPeerValidationNotifications - start, subType: {}", subType);
+        ApiResponse response = ApiResponse.createDefaultResponse(PEER_VALIDATION_LIST_API_ID);
+        try {
+            String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
+            if (StringUtils.isEmpty(userId)) {
+                updateErrorDetails(response, Constants.USER_ID_DOESNT_EXIST, HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            String tableName = resolveTableNameForSubType(subType);
+            if (StringUtils.isEmpty(tableName)) {
+                updateErrorDetails(response,
+                        "Invalid subType '" + subType + "'. Must be PEER_EVALUATION_ASSIGNED or PEER_REVIEW_ASSIGNED",
+                        HttpStatus.BAD_REQUEST);
+                return response;
+            }
+
+            int maxFetch = cbServerProperties.getPeerValidationListMaxFetch();
+            Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
+
+            List<Map<String, Object>> records = fetchPeerValidationRecords(tableName, userId, maxFetch);
+            List<Map<String, Object>> filtered = filterSortAndLimit(records, fromDate, maxFetch);
+
+            int total = filtered.size();
+            int fromIndex = Math.min(page * size, total);
+            int toIndex = Math.min(fromIndex + size, total);
+
+            List<Map<String, Object>> processed = filtered.subList(fromIndex, toIndex).stream()
+                    .map(this::serializePeerValidationRecord)
+                    .toList();
+
+            response.setResponseCode(HttpStatus.OK);
+            response.setResult(buildPeerValidationListResult(processed, total, page, size, toIndex));
+            log.info("NotificationService::getPeerValidationNotifications - success, subType: {}, total: {}", subType, total);
+
+        } catch (Exception e) {
+            log.error("Error fetching peer validation notifications: {}", e.getMessage(), e);
+            updateErrorDetails(response, INTERNAL_ERROR_MSG, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return response;
+    }
+
+    /**
+     * Maps a peer-validation subType string to its target Cassandra table name.
+     *
+     * @return the table name, or {@code null} if the subType is not recognised
+     */
+    private String resolveTableNameForSubType(String subType) {
+        if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subType)) {
+            return TABLE_PEER_VALIDATION_REQUESTS;
+        }
+        if (SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subType)) {
+            return TABLE_PEER_VALIDATION_REVIEWS;
+        }
+        return "";
+    }
+
+    /**
+     * Fetches up to {@code maxFetch} peer-validation records for the given user from Cassandra.
+     */
+    private List<Map<String, Object>> fetchPeerValidationRecords(String tableName, String userId, int maxFetch) {
+        return cassandraOperation.getRecordsByProperties(
+                Constants.KEYSPACE_SUNBIRD,
+                tableName,
+                Map.of(USER_ID, userId),
+                null,
+                maxFetch
+        );
+    }
+
+    /**
+     * Retains only records within the {@code fromDate} window, sorts them newest-first,
+     * and caps the list at {@code maxFetch} entries.
+     */
+    private List<Map<String, Object>> filterSortAndLimit(
+            List<Map<String, Object>> records, Instant fromDate, int maxFetch) {
+        return records.stream()
+                .filter(r -> {
+                    Instant createdAt = getInstant(r.get(CREATED_AT));
+                    return ObjectUtils.isNotEmpty(createdAt) && !createdAt.isBefore(fromDate);
+                })
+                .sorted(Comparator.comparing(
+                        r -> getInstant(r.get(CREATED_AT)),
+                        Comparator.reverseOrder()))
+                .limit(maxFetch)
+                .toList();
+    }
+
+    /**
+     * Returns a copy of the record with all {@link Instant} date fields ({@code created_at},
+     * {@code survey_end_date}, {@code action_at}, {@code updated_at}) converted to ISO-8601 strings for the API response.
+     * Also deserializes the {@code metadata} field from JSON string to object.
+     */
+    private Map<String, Object> serializePeerValidationRecord(Map<String, Object> sourceRecord) {
+        Map<String, Object> entry = new HashMap<>(sourceRecord);
+        serializeInstantField(entry, CREATED_AT);
+        serializeInstantField(entry, SURVEY_END_DATE);
+        serializeInstantField(entry, ACTION_AT);
+        serializeInstantField(entry, UPDATED_AT);
+        deserializeJsonField(entry);
+        return entry;
+    }
+
+    /**
+     * Deserializes a JSON string field into an object in-place.
+     */
+    private void deserializeJsonField(Map<String, Object> map) {
+        Object value = map.get(Constants.METADATA);
+        if (value instanceof String jsonString && StringUtils.isNotBlank(jsonString)) {
+            try {
+                Object parsed = objectMapper.readValue(jsonString, Object.class);
+                map.put(Constants.METADATA, parsed);
+            } catch (Exception e) {
+                log.warn("Could not parse {} field as JSON: {}", Constants.METADATA, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Converts the named field in {@code map} from an {@link Instant} to its ISO-8601 string
+     * representation in-place; leaves the field unchanged if it is not an {@link Instant}.
+     */
+    private void serializeInstantField(Map<String, Object> map, String fieldName) {
+        if (map.get(fieldName) instanceof Instant instant) {
+            map.put(fieldName, instant.toString());
+        }
+    }
+
+    /**
+     * Builds the paginated result map returned to the caller for the peer-validation list API.
+     */
+    private Map<String, Object> buildPeerValidationListResult(
+            List<Map<String, Object>> processed, int total, int page, int size, int toIndex) {
+        Map<String, Object> resultMap = new HashMap<>();
+        resultMap.put(NOTIFICATIONS, processed);
+        resultMap.put(TOTAL_COUNT, total);
+        resultMap.put(PAGE, page);
+        resultMap.put(SIZE, size);
+        resultMap.put(HAS_NEXT_PAGE, toIndex < total);
+        return resultMap;
     }
 }

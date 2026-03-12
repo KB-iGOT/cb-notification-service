@@ -164,4 +164,202 @@ class NotificationControllerTest {
         assertEquals(apiResponse, response.getBody());
         assertEquals(HttpStatus.OK, response.getStatusCode());
     }
+
+    @Test
+    void testGetPeerValidationNotifications_withPeerEvaluationAssigned() {
+        String token = "test-token";
+        String subType = Constants.SUB_CATEGORY_PEER_EVALUATION_ASSIGNED;
+        int days = 7;
+        int page = 0;
+        int size = 10;
+
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setVer("1.0");
+        apiResponse.setTs("2026-03-12T10:00:00Z");
+        apiResponse.setResponseCode(HttpStatus.OK);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put(Constants.NOTIFICATIONS, List.of());
+        result.put(Constants.TOTAL_COUNT, 0);
+        result.put(Constants.PAGE, page);
+        result.put(Constants.SIZE, size);
+        result.put(Constants.HAS_NEXT_PAGE, false);
+        apiResponse.setResult(result);
+
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(Constants.PEER_VALIDATION_LIST_API_ID, response.getBody().get(Constants.ID));
+        assertEquals("1.0", response.getBody().get(Constants.VER));
+        assertEquals(HttpStatus.OK, response.getBody().get(Constants.RESPONSE_CODE));
+        assertNotNull(response.getBody().get(Constants.RESULT));
+        
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testGetPeerValidationNotifications_withPeerReviewAssigned() {
+        String token = "test-token";
+        String subType = Constants.SUB_CATEGORY_PEER_REVIEW_ASSIGNED;
+        int days = 30;
+        int page = 1;
+        int size = 20;
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setVer("1.0");
+        apiResponse.setTs("2026-03-12T10:00:00Z");
+        apiResponse.setResponseCode(HttpStatus.OK);
+        List<Map<String, Object>> notifications = new ArrayList<>();
+        Map<String, Object> notification1 = new HashMap<>();
+        notification1.put(Constants.NOTIFICATION_ID, "notif-1");
+        notification1.put(Constants.USER_ID, "user001");
+        notification1.put(Constants.STATUS, "PENDING");
+        notifications.add(notification1);
+        Map<String, Object> result = new HashMap<>();
+        result.put(Constants.NOTIFICATIONS, notifications);
+        result.put(Constants.TOTAL_COUNT, 1);
+        result.put(Constants.PAGE, page);
+        result.put(Constants.SIZE, size);
+        result.put(Constants.HAS_NEXT_PAGE, false);
+        apiResponse.setResult(result);
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        Map<String, Object> responseResult = (Map<String, Object>) response.getBody().get(Constants.RESULT);
+        assertNotNull(responseResult);
+        assertEquals(1, responseResult.get(Constants.TOTAL_COUNT));
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testGetPeerValidationNotifications_withDefaultParameters() {
+        String token = "test-token";
+        String subType = Constants.SUB_CATEGORY_PEER_EVALUATION_ASSIGNED;
+        int days = 7;
+        int page = 0;
+        int size = 10;
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setResponseCode(HttpStatus.OK);
+        apiResponse.setResult(new HashMap<>());
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testGetPeerValidationNotifications_withBadRequest() {
+        String token = "test-token";
+        String subType = "INVALID_SUBTYPE";
+        int days = 7;
+        int page = 0;
+        int size = 10;
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setResponseCode(HttpStatus.BAD_REQUEST);
+        apiResponse.setResult(new HashMap<>());
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+        assertNotNull(response);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testGetPeerValidationNotifications_withPaginationAndHasNextPage() {
+        String token = "test-token";
+        String subType = Constants.SUB_CATEGORY_PEER_EVALUATION_ASSIGNED;
+        int days = 14;
+        int page = 0;
+        int size = 5;
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setVer("1.0");
+        apiResponse.setResponseCode(HttpStatus.OK);
+        List<Map<String, Object>> notifications = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Map<String, Object> notification = new HashMap<>();
+            notification.put(Constants.NOTIFICATION_ID, "notif-" + i);
+            notification.put(Constants.USER_ID, "user001");
+            notification.put(Constants.STATUS, "PENDING");
+            notifications.add(notification);
+        }
+        Map<String, Object> result = new HashMap<>();
+        result.put(Constants.NOTIFICATIONS, notifications);
+        result.put(Constants.TOTAL_COUNT, 15);
+        result.put(Constants.PAGE, page);
+        result.put(Constants.SIZE, size);
+        result.put(Constants.HAS_NEXT_PAGE, true);
+        apiResponse.setResult(result);
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> responseResult = (Map<String, Object>) response.getBody().get(Constants.RESULT);
+        assertNotNull(responseResult);
+        assertEquals(15, responseResult.get(Constants.TOTAL_COUNT));
+        assertEquals(true, responseResult.get(Constants.HAS_NEXT_PAGE));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> notificationsList = 
+                (List<Map<String, Object>>) responseResult.get(Constants.NOTIFICATIONS);
+        assertEquals(5, notificationsList.size());
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testGetPeerValidationNotifications_verifyResponseBodyStructure() {
+        String token = "test-token";
+        String subType = Constants.SUB_CATEGORY_PEER_EVALUATION_ASSIGNED;
+        int days = 7;
+        int page = 0;
+        int size = 10;
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setId(Constants.PEER_VALIDATION_LIST_API_ID);
+        apiResponse.setVer("1.0");
+        apiResponse.setTs("2026-03-12T10:00:00Z");
+        apiResponse.setResponseCode(HttpStatus.OK);
+        apiResponse.setResult(new HashMap<>());
+        when(notificationService.getPeerValidationNotifications(token, subType, days, page, size))
+                .thenReturn(apiResponse);
+        ResponseEntity<Map<String, Object>> response = 
+                notificationController.getPeerValidationNotifications(token, subType, days, page, size);
+        assertNotNull(response);
+        assertNotNull(response.getBody());
+        Map<String, Object> responseBody = response.getBody();
+        assertTrue(responseBody.containsKey(Constants.ID));
+        assertTrue(responseBody.containsKey(Constants.VER));
+        assertTrue(responseBody.containsKey(Constants.TS));
+        assertTrue(responseBody.containsKey(Constants.PARAMS));
+        assertTrue(responseBody.containsKey(Constants.RESPONSE_CODE));
+        assertTrue(responseBody.containsKey(Constants.RESULT));
+        assertFalse(responseBody.containsKey("response"), 
+                "Response body should not contain duplicate 'response' field");
+        verify(notificationService, times(1))
+                .getPeerValidationNotifications(token, subType, days, page, size);
+    }
 }

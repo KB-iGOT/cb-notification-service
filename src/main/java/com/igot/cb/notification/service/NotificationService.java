@@ -34,4 +34,17 @@ public interface NotificationService {
      */
     ApiResponse bulkCreatePeerValidationNotifications(Map<String, Object> requestBody);
 
+    /**
+     * Fetches paginated peer-validation records for the authenticated user from the table
+     * corresponding to the given {@code subType}.
+     *
+     * @param token   x-auth-token of the requesting user
+     * @param subType PEER_EVALUATION_ASSIGNED or PEER_REVIEW_ASSIGNED
+     * @param days    how many past days to include
+     * @param page    zero-based page index
+     * @param size    page size
+     * @return {@link ApiResponse} with paginated records and pagination metadata
+     */
+    ApiResponse getPeerValidationNotifications(String token, String subType, int days, int page, int size);
+
 }
