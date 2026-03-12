@@ -11,7 +11,7 @@ class NotificationCategoryTest {
     @Test
     void testValuesContainsAllConstants() {
         NotificationCategory[] categories = NotificationCategory.values();
-        assertEquals(6, categories.length);
+        assertEquals(7, categories.length);
         assertArrayEquals(
                 new NotificationCategory[]{
                         NotificationCategory.LEARN,
@@ -19,7 +19,8 @@ class NotificationCategoryTest {
                         NotificationCategory.EVENT,
                         NotificationCategory.NETWORK,
                         NotificationCategory.PROFILE,
-                        NotificationCategory.CONTENT
+                        NotificationCategory.CONTENT,
+                        NotificationCategory.PEER_VALIDATION
                 },
                 categories
         );

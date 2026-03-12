@@ -317,7 +317,7 @@ class BulkPeerValidationNotificationTest {
             verify(cassandraOperation).insertBulkRecord(
                     eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyList());
             verify(cassandraOperation).insertBulkRecord(
-                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_ACTIONS), anyList());
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyList());
             verify(cassandraOperation).getRecordsByProperties(
                     eq(KEYSPACE_SUNBIRD), eq(TABLE_UNREAD_NOTIFICATION_COUNT), anyMap(), anyList(), anyInt());
             verify(cassandraOperation, times(3)).insertBulkRecord(anyString(), anyString(), anyList());
@@ -375,7 +375,7 @@ class BulkPeerValidationNotificationTest {
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<Map<String, Object>>> captor = ArgumentCaptor.forClass(List.class);
             verify(cassandraOperation).insertBulkRecord(
-                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_ACTIONS), captor.capture());
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), captor.capture());
             List<Map<String, Object>> actionRecords = captor.getValue();
             assertEquals(1, actionRecords.size());
             Map<String, Object> action = actionRecords.get(0);
