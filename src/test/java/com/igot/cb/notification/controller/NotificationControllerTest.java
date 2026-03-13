@@ -108,7 +108,7 @@ class NotificationControllerTest {
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
 
-        when(notificationService.markNotificationsAsRead(token, request)).thenReturn(apiResponse);
+        when(notificationService.markNotificationsAsRead(token, request, Constants.API_VERSION_V1)).thenReturn(apiResponse);
 
         ResponseEntity<?> response = notificationController.markNotificationsAsRead(token, requestBody);
 
@@ -361,5 +361,20 @@ class NotificationControllerTest {
                 "Response body should not contain duplicate 'response' field");
         verify(notificationService, times(1))
                 .getPeerValidationNotifications(token, subType, days, page, size);
+    }
+
+    @Test
+    void testMarkNotificationsAsReadV2() {
+        String token = "token";
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.TYPE, Constants.ALL);
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put(Constants.REQUEST, request);
+        ApiResponse apiResponse = new ApiResponse();
+        apiResponse.setResponseCode(HttpStatus.OK);
+        when(notificationService.markNotificationsAsRead(token, request, Constants.API_VERSION_V2)).thenReturn(apiResponse);
+        ResponseEntity<?> response = notificationController.markNotificationsAsReadV2(token, requestBody);
+        assertEquals(apiResponse, response.getBody());
+        assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 }

@@ -1,6 +1,7 @@
 package com.igot.cb.notification.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -12,6 +13,7 @@ import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.enums.NotificationType;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
 import com.igot.cb.notification.service.NotificationService;
+import com.igot.cb.producer.Producer;
 import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import io.micrometer.common.util.StringUtils;
@@ -45,14 +47,16 @@ public class NotificationServiceImpl implements NotificationService {
     private ObjectMapper objectMapper;
     private NotificationSettingRepository notificationSettingRepository;
     private CbServerProperties cbServerProperties;
+    private Producer producer;
     public NotificationServiceImpl(AccessTokenValidator accessTokenValidator, CassandraOperation cassandraOperation,
             ObjectMapper objectMapper, NotificationSettingRepository notificationSettingRepository,
-            CbServerProperties cbServerProperties) {
+            CbServerProperties cbServerProperties, Producer producer) {
         this.accessTokenValidator = accessTokenValidator;
         this.cassandraOperation = cassandraOperation;
         this.objectMapper = objectMapper;
         this.notificationSettingRepository = notificationSettingRepository;
         this.cbServerProperties = cbServerProperties;
+        this.producer = producer;
     }
 
     private final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
@@ -667,7 +671,7 @@ public class NotificationServiceImpl implements NotificationService {
 
 
     @Override
-    public ApiResponse markNotificationsAsRead(String authToken, Map<String, Object> request) {
+    public ApiResponse markNotificationsAsRead(String authToken, Map<String, Object> request, String version) {
         log.info("NotificationService::markNotificationsAsRead - Incoming request: {}", request);
 
         ApiResponse response = ApiResponse.createDefaultResponse(Constants.USER_NOTIFICATION_READ_UPDATEID);
@@ -738,6 +742,9 @@ public class NotificationServiceImpl implements NotificationService {
             } else if (INDIVIDUAL.equalsIgnoreCase(type)) {
                 notificationIds = extractIndividualNotificationIds(request, response);
                 if (CollectionUtils.isEmpty(notificationIds)) return response;
+                if (Constants.API_VERSION_V2.equals(version)) {
+                    return markIndividualNotificationAsRead(userId, request, response, notificationIds);
+                }
             } else {
                 updateErrorDetails(response, "Invalid type. Allowed values: all, individual", HttpStatus.BAD_REQUEST);
                 return response;
@@ -1833,5 +1840,171 @@ public class NotificationServiceImpl implements NotificationService {
                 updateAttributes,
                 compositeKey
         );
+    }
+
+
+    /**
+     * Marks a single notification as read for the given user.
+     * Validates the {@code created_at} field, persists the read status to Cassandra,
+     * triggers the peer-survey Kafka event, and returns a success response.
+     *
+     * @param userId          the authenticated user's ID
+     * @param request         the request payload; must contain {@code created_at} (ISO-8601)
+     * @param response        the {@link ApiResponse} to populate
+     * @param notificationIds list of notification IDs; first element is used as the target
+     * @return populated {@link ApiResponse} — 200 OK on success, 400 BAD_REQUEST if {@code created_at} is missing
+     */
+    private ApiResponse markIndividualNotificationAsRead(String userId, Map<String, Object> request, ApiResponse response, List<String> notificationIds) {
+        log.info("markIndividualNotificationAsRead: userId={}, notificationId={}", userId, notificationIds.isEmpty() ? "none" : notificationIds.get(0));
+        String createdAtStr = (String) request.get(CREATED_AT);
+        if (StringUtils.isBlank(createdAtStr)) {
+            updateErrorDetails(response, "Missing 'created_at' field", HttpStatus.BAD_REQUEST);
+            return response;
+        }
+        Instant createdAt = Instant.parse(createdAtStr);
+        String notificationId = notificationIds.get(0);
+        Instant now = Instant.now();
+        updateNotificationReadStatus(userId, createdAt, now);
+        publishPeerSurveyReadEvent(userId, notificationId, createdAt, now);
+        log.info("markIndividualNotificationAsRead: successfully marked notificationId={} as read for userId={}", notificationId, userId);
+        return buildReadSuccessResponse(response, notificationId, now);
+    }
+
+    /**
+     * Persists the {@code read=true} and {@code read_at} timestamp for a notification
+     * in {@code user_notification} using the composite key ({@code user_id}, {@code created_at}).
+     *
+     * @param userId    the authenticated user's ID
+     * @param createdAt the partition key timestamp of the notification
+     * @param now       the instant to set as {@code read_at}
+     */
+    private void updateNotificationReadStatus(String userId, Instant createdAt, Instant now) {
+        log.info("updateNotificationReadStatus: updating read status for userId={}, createdAt={}", userId, createdAt);
+        cassandraOperation.updateRecord(
+                KEYSPACE_SUNBIRD,
+                TABLE_USER_NOTIFICATION,
+                Map.of(READ, true, READ_AT, now),
+                Map.of(USER_ID, userId, CREATED_AT, createdAt)
+        );
+    }
+
+    /**
+     * Assembles a 200 OK {@link ApiResponse} containing the notification ID, {@code read=true},
+     * and the {@code read_at} timestamp for the read confirmation payload.
+     *
+     * @param response       the response object to populate
+     * @param notificationId the ID of the notification that was marked as read
+     * @param now            the instant recorded as {@code read_at}
+     * @return the populated {@link ApiResponse}
+     */
+    private ApiResponse buildReadSuccessResponse(ApiResponse response, String notificationId, Instant now) {
+        response.getParams().setErrMsg("Notification marked as read");
+        response.getParams().setStatus(Constants.SUCCESS);
+        response.setResponseCode(HttpStatus.OK);
+        response.setResult(Map.of(Constants.NOTIFICATIONS, List.of(
+                Map.of(ID, notificationId, READ, true, READ_AT, now.toString())
+        )));
+        return response;
+    }
+
+    /**
+     * Fetches the notification message, extracts the {@code formId}, builds a
+     * {@code PEER_SURVEY_NOTIFICATION_READ} Kafka event, and publishes it.
+     * All failures are logged and swallowed to avoid affecting the read response.
+     *
+     * @param userId         the authenticated user's ID
+     * @param notificationId the target notification ID
+     * @param createdAt      the composite key timestamp used to fetch the message
+     * @param now            the epoch-millis timestamp embedded in the Kafka event
+     */
+    private void publishPeerSurveyReadEvent(String userId, String notificationId, Instant createdAt, Instant now) {
+        log.info("publishPeerSurveyReadEvent: start for userId={}, notificationId={}", userId, notificationId);
+        try {
+            Optional<String> messageOpt = fetchNotificationMessage(userId, createdAt, notificationId);
+            if (messageOpt.isEmpty()) return;
+            Optional<String> formIdOpt = extractFormId(messageOpt.get(), notificationId);
+            if (formIdOpt.isEmpty()) return;
+            Map<String, Object> event = buildPeerSurveyReadEvent(formIdOpt.get(), userId, now);
+            producer.push(cbServerProperties.getKafkaTopicNotificationReadEvent(), event);
+            log.info("publishPeerSurveyReadEvent: event published for userId={} notificationId={} formId={}", userId, notificationId, formIdOpt.get());
+        } catch (Exception e) {
+            log.error("publishPeerSurveyReadEvent: failed for userId={} notificationId={}: {}", userId, notificationId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Fetches the {@code message} column from {@code user_notification} for the given
+     * composite key ({@code user_id}, {@code created_at}).
+     *
+     * @param userId         the authenticated user's ID
+     * @param createdAt      the composite key timestamp
+     * @param notificationId the notification ID (used only for log context)
+     * @return an {@link Optional} containing the message string, or empty if the record
+     *         is missing or the message field is blank
+     */
+    private Optional<String> fetchNotificationMessage(String userId, Instant createdAt, String notificationId) {
+        log.info("fetchNotificationMessage: querying for userId={}, createdAt={}", userId, createdAt);
+        List<Map<String, Object>> records = cassandraOperation.getRecordsByProperties(
+                KEYSPACE_SUNBIRD,
+                TABLE_USER_NOTIFICATION,
+                Map.of(USER_ID, userId, CREATED_AT, createdAt),
+                List.of(MESSAGE),
+                1
+        );
+        if (CollectionUtils.isEmpty(records)) {
+            log.warn("fetchNotificationMessage: record not found for userId={} createdAt={}", userId, createdAt);
+            return Optional.empty();
+        }
+        String messageStr = (String) records.get(0).get(MESSAGE);
+        if (StringUtils.isBlank(messageStr)) {
+            log.warn("fetchNotificationMessage: message field is blank for notificationId={}", notificationId);
+            return Optional.empty();
+        }
+        log.info("fetchNotificationMessage: message retrieved for notificationId={}", notificationId);
+        return Optional.of(messageStr);
+    }
+
+    /**
+     * Parses the JSON message string and extracts {@code message.data[0].formId}.
+     *
+     * @param messageStr     the raw JSON string of the notification message
+     * @param notificationId the notification ID (used only for log context)
+     * @return an {@link Optional} containing the formId, or empty if {@code data} is missing/empty
+     *         or {@code formId} is blank
+     * @throws Exception if JSON parsing fails (propagated to caller's try-catch)
+     */
+    @SuppressWarnings("unchecked")
+    private Optional<String> extractFormId(String messageStr, String notificationId) throws Exception {
+        Map<String, Object> messageMap = objectMapper.readValue(messageStr, new TypeReference<Map<String, Object>>() {});
+        List<Map<String, Object>> dataList = (List<Map<String, Object>>) messageMap.get(DATA);
+        if (CollectionUtils.isEmpty(dataList)) {
+            log.warn("extractFormId: message.data is missing or empty for notificationId={}", notificationId);
+            return Optional.empty();
+        }
+        String formId = (String) dataList.get(0).get(Constants.FORM_ID);
+        if (StringUtils.isBlank(formId)) {
+            log.warn("extractFormId: formId not found in message.data[0] for notificationId={}", notificationId);
+            return Optional.empty();
+        }
+        log.info("extractFormId: formId={} extracted for notificationId={}", formId, notificationId);
+        return Optional.of(formId);
+    }
+
+    /**
+     * Constructs the {@code PEER_SURVEY_NOTIFICATION_READ} Kafka event payload
+     * with {@code eventType}, {@code formId}, {@code userId}, and {@code timeStamp}.
+     *
+     * @param formId the form identifier extracted from the notification message
+     * @param userId the authenticated user's ID
+     * @param now    the instant whose epoch-millis value is used as the event timestamp
+     * @return an ordered map representing the Kafka event payload
+     */
+    private Map<String, Object> buildPeerSurveyReadEvent(String formId, String userId, Instant now) {
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put(Constants.EVENT_TYPE, Constants.PEER_SURVEY_NOTIFICATION_READ_EVENT);
+        event.put(Constants.FORM_ID, formId);
+        event.put(USER_ID_FIELD, userId);
+        event.put(Constants.TIMESTAMP, now.toEpochMilli());
+        return event;
     }
 }

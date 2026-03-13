@@ -64,4 +64,7 @@ public class CbServerProperties {
 
   @Value("${kafka.topic.process.peer.validation.error}")
   private String kafkaTopicPeerValidationError;
+
+  @Value("${kafka.topic.notification.read.event}")
+  private String kafkaTopicNotificationReadEvent;
 }

@@ -522,6 +522,12 @@ public class Constants {
     public static final String NOTIFICATION_ID_FIELD = "notificationId";
     public static final String CREATED_AT_FIELD = "createdAt";
     public static final String SUB_CATEGORY_FIELD = "subCategory";
+    public static final String MARK_NOTIFICATIONS_READ_V2_ENDPOINT = "/v2/read";
+    public static final String API_VERSION_V1 = "V1";
+    public static final String API_VERSION_V2 = "V2";
+    public static final String FORM_ID = "formId";
+    public static final String EVENT_TYPE = "eventType";
+    public static final String PEER_SURVEY_NOTIFICATION_READ_EVENT = "PEER_SURVEY_NOTIFICATION_READ";
 
     private Constants() {
     }

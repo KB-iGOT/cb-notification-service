@@ -67,7 +67,7 @@ public class NotificationController {
             @RequestBody Map<String, Object> requestBody) {
 
         Map<String, Object> request = (Map<String, Object>) requestBody.get(REQUEST);
-        ApiResponse response = notificationService.markNotificationsAsRead(token, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(token, request, Constants.API_VERSION_V1);
         return ResponseEntity.ok(response);
     }
 
@@ -131,6 +131,15 @@ public class NotificationController {
         responseBody.put(RESPONSE_CODE, apiResponse.getResponseCode());
         responseBody.put(RESULT, apiResponse.getResult());
         return new ResponseEntity<>(responseBody, apiResponse.getResponseCode());
+    }
+
+    @PatchMapping(Constants.MARK_NOTIFICATIONS_READ_V2_ENDPOINT)
+    public ResponseEntity<ApiResponse> markNotificationsAsReadV2(
+            @RequestHeader(Constants.X_AUTH_TOKEN) String token,
+            @RequestBody Map<String, Object> requestBody) {
+        Map<String, Object> request = (Map<String, Object>) requestBody.get(REQUEST);
+        ApiResponse response = notificationService.markNotificationsAsRead(token, request, Constants.API_VERSION_V2);
+        return ResponseEntity.ok(response);
     }
 
 }

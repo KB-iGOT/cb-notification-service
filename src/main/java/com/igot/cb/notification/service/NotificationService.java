@@ -18,7 +18,7 @@ public interface NotificationService {
 
     ApiResponse getNotificationsByUserIdAndLastXDays(String token, int days, int page, int size, NotificationReadStatus status, String subType);
 
-    ApiResponse markNotificationsAsRead(String token, Map<String, Object> request);
+    ApiResponse markNotificationsAsRead(String token, Map<String, Object> request, String version);
 
     ApiResponse markNotificationsAsDeleted(String token, List<String> notificationIds);
 
