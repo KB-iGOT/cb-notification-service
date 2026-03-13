@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.notification.service.NotificationService;
+import com.igot.cb.producer.Producer;
+import com.igot.cb.util.CbServerProperties;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +14,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import static com.igot.cb.util.Constants.*;
 
@@ -28,10 +31,17 @@ public class PeerValidationStatusConsumer {
 
     private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
+    private final Producer producer;
+    private final CbServerProperties cbServerProperties;
 
-    public PeerValidationStatusConsumer(NotificationService notificationService, ObjectMapper objectMapper) {
+    public PeerValidationStatusConsumer(NotificationService notificationService,
+                                        ObjectMapper objectMapper,
+                                        Producer producer,
+                                        CbServerProperties cbServerProperties) {
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
+        this.producer = producer;
+        this.cbServerProperties = cbServerProperties;
     }
 
     /**
@@ -46,7 +56,17 @@ public class PeerValidationStatusConsumer {
             groupId = "${kafka.group.process.peer.validation}"
     )
     public void consumeStatusUpdate(String message) {
-        log.info("Received peer validation status update from Kafka: {}", message);
+        try {
+            if (StringUtils.isNotBlank(message)) {
+                CompletableFuture.runAsync(() -> processStatusUpdateAsync(message));
+            }
+        } catch (Exception e) {
+            log.error("Error in PeerValidationStatusConsumer: {}", e.getMessage(), e);
+            producer.push(cbServerProperties.getKafkaTopicPeerValidationError(), Map.of("originalMessage", message, "errorMessage", e.getMessage()));
+        }
+    }
+
+    private void processStatusUpdateAsync(String message) {
         try {
             Map<String, Object> messageMap = parseMessage(message);
             if (!isValidMessage(messageMap, message)) {
@@ -61,6 +81,7 @@ public class PeerValidationStatusConsumer {
                     request.getNotificationId());
         } catch (Exception e) {
             log.error("Failed to process peer validation status update from Kafka: {}", e.getMessage(), e);
+            producer.push(cbServerProperties.getKafkaTopicPeerValidationError(), Map.of("originalMessage", message, "errorMessage", e.getMessage()));
         }
     }
 

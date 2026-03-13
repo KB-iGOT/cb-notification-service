@@ -61,4 +61,7 @@ public class CbServerProperties {
 
   @Value("${kafka.consumer.peer.validation.group-id}")
   private String kafkaConsumerPeerValidationGroupId;
+
+  @Value("${kafka.topic.process.peer.validation.error}")
+  private String kafkaTopicPeerValidationError;
 }
