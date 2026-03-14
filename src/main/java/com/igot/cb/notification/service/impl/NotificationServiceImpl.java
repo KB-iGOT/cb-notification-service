@@ -1263,7 +1263,7 @@ public class NotificationServiceImpl implements NotificationService {
         Set<String> uniqueUserIds = new LinkedHashSet<>();
         List<Map<String, Object>> notificationsForInsert = prepareRecordsForInsert(eligibleNotifications, uniqueUserIds);
         cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION, notificationsForInsert);
-        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_REQUESTS, actionRecords);
+        persistActionRecordsBySubCategory(actionRecords);
         bulkIncrementUnreadCounts(uniqueUserIds);
         return eligibleNotifications.stream().map(this::buildPeerValidationResponseEntry).toList();
     }
@@ -1459,6 +1459,7 @@ public class NotificationServiceImpl implements NotificationService {
     /**
      * Constructs the peer-validation action record, parsing the survey end-date and
      * serializing survey metadata to JSON for Cassandra storage.
+     * Includes sub_category for downstream routing to appropriate table.
      */
     private Map<String, Object> buildActionRecord(
             String notificationId, String userId, Map<String, Object> request,
@@ -1468,6 +1469,7 @@ public class NotificationServiceImpl implements NotificationService {
         Map<String, Object> actionMap = new HashMap<>();
         actionMap.put(NOTIFICATION_ID, notificationId);
         actionMap.put(USER_ID, userId);
+        actionMap.put(SUB_CATEGORY, request.get(SUB_CATEGORY));
         actionMap.put(SURVEY_END_DATE, surveyEndDate);
         actionMap.put(ACTION_AT, null);
         actionMap.put(METADATA, objectMapper.writeValueAsString(surveyData));
@@ -2122,5 +2124,36 @@ public class NotificationServiceImpl implements NotificationService {
         response.setResult(Map.of(Constants.NOTIFICATIONS, updated));
         log.info("Non-peer notification marked as read: userId={}, notificationId={}", userId, notificationId);
         return response;
+    }
+
+    /**
+     * Routes action records to appropriate Cassandra tables based on sub_category.
+     * PEER_EVALUATION_ASSIGNED → peer_validation_requests table.
+     * PEER_REVIEW_ASSIGNED → peer_validation_reviews table.
+     * Creates copies without sub_category for insertion (does not mutate input).
+     */
+    private void persistActionRecordsBySubCategory(List<Map<String, Object>> actionRecords) {
+        List<Map<String, Object>> evaluationRecords = new ArrayList<>();
+        List<Map<String, Object>> reviewRecords = new ArrayList<>();
+        for (Map<String, Object> actionRecord : actionRecords) {
+            String subCategory = (String) actionRecord.get(SUB_CATEGORY);
+            if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                evaluationRecords.add(actionRecord);
+            } else if (SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                reviewRecords.add(actionRecord);
+            }
+            actionRecord.remove(SUB_CATEGORY);
+        }
+        insertActionRecordsIfNotEmpty(evaluationRecords, TABLE_PEER_VALIDATION_REQUESTS);
+        insertActionRecordsIfNotEmpty(reviewRecords, TABLE_PEER_VALIDATION_REVIEWS);
+    }
+
+    /**
+     * Inserts action records to the specified table if the list is not empty.
+     */
+    private void insertActionRecordsIfNotEmpty(List<Map<String, Object>> records, String tableName) {
+        if (CollectionUtils.isNotEmpty(records)) {
+            cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, tableName, records);
+        }
     }
 }
