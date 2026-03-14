@@ -528,6 +528,7 @@ public class Constants {
     public static final String FORM_ID = "formId";
     public static final String EVENT_TYPE = "eventType";
     public static final String PEER_SURVEY_NOTIFICATION_READ_EVENT = "PEER_SURVEY_NOTIFICATION_READ";
+    public static final String CATEGORY_PEER_VALIDATION = "PEER_VALIDATION";
 
     private Constants() {
     }
