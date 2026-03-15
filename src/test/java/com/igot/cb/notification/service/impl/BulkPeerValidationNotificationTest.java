@@ -380,7 +380,7 @@ class BulkPeerValidationNotificationTest {
             assertEquals(1, actionRecords.size());
             Map<String, Object> action = actionRecords.get(0);
             assertEquals(USER_1, action.get(USER_ID));
-            assertEquals(SUB_CATEGORY_VAL, action.get(SUB_CATEGORY));
+            assertFalse(action.containsKey(SUB_CATEGORY), "sub_category should be removed before insert");
             assertNotNull(action.get(NOTIFICATION_ID));
             assertNotNull(action.get(Constants.CREATED_AT));
             assertInstanceOf(Instant.class, action.get(SURVEY_END_DATE));
@@ -553,5 +553,41 @@ class BulkPeerValidationNotificationTest {
                     Map.of("something", "else"));
             assertEquals(HttpStatus.BAD_REQUEST, res.getResponseCode());
         }
+    }
+
+    @Test
+    @DisplayName("PEER_REVIEW_ASSIGNED routes to peer_validation_reviews table")
+    void peerReviewAssigned_routesToReviewsTable() {
+        Map<String, Object> req = buildValidRequest(USER_1);
+        req.put(SUB_CATEGORY, "PEER_REVIEW_ASSIGNED");
+        notificationService.bulkCreatePeerValidationNotifications(wrapRequestBody(List.of(req)));
+        ArgumentCaptor<List<Map<String, Object>>> captor = ArgumentCaptor.forClass(List.class);
+        verify(cassandraOperation).insertBulkRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REVIEWS), captor.capture());
+        List<Map<String, Object>> actionRecords = captor.getValue();
+        assertEquals(1, actionRecords.size());
+        assertEquals(USER_1, actionRecords.get(0).get(USER_ID));
+        assertFalse(actionRecords.get(0).containsKey(SUB_CATEGORY));
+    }
+
+    @Test
+    @DisplayName("mixed sub_categories route to respective tables")
+    void mixedSubCategories_routeCorrectly() {
+        Map<String, Object> evalReq = buildValidRequest(USER_1);
+        evalReq.put(SUB_CATEGORY, "PEER_EVALUATION_ASSIGNED");
+        Map<String, Object> reviewReq = buildValidRequest(USER_2);
+        reviewReq.put(SUB_CATEGORY, "PEER_REVIEW_ASSIGNED");
+        notificationService.bulkCreatePeerValidationNotifications(
+                wrapRequestBody(List.of(evalReq, reviewReq)));
+        ArgumentCaptor<List<Map<String, Object>>> evalCaptor = ArgumentCaptor.forClass(List.class);
+        verify(cassandraOperation).insertBulkRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), evalCaptor.capture());
+        assertEquals(1, evalCaptor.getValue().size());
+        assertEquals(USER_1, evalCaptor.getValue().get(0).get(USER_ID));
+        ArgumentCaptor<List<Map<String, Object>>> reviewCaptor = ArgumentCaptor.forClass(List.class);
+        verify(cassandraOperation).insertBulkRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REVIEWS), reviewCaptor.capture());
+        assertEquals(1, reviewCaptor.getValue().size());
+        assertEquals(USER_2, reviewCaptor.getValue().get(0).get(USER_ID));
     }
 }

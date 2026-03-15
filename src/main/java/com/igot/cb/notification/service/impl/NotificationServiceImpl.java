@@ -743,7 +743,7 @@ public class NotificationServiceImpl implements NotificationService {
                 notificationIds = extractIndividualNotificationIds(request, response);
                 if (CollectionUtils.isEmpty(notificationIds)) return response;
                 if (Constants.API_VERSION_V2.equals(version)) {
-                    return markIndividualNotificationAsRead(userId, request, response, notificationIds);
+                    return markIndividualNotificationAsRead(userId, request, response, notificationIds,userNotifications);
                 }
             } else {
                 updateErrorDetails(response, "Invalid type. Allowed values: all, individual", HttpStatus.BAD_REQUEST);
@@ -1263,7 +1263,7 @@ public class NotificationServiceImpl implements NotificationService {
         Set<String> uniqueUserIds = new LinkedHashSet<>();
         List<Map<String, Object>> notificationsForInsert = prepareRecordsForInsert(eligibleNotifications, uniqueUserIds);
         cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_USER_NOTIFICATION, notificationsForInsert);
-        cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, TABLE_PEER_VALIDATION_REQUESTS, actionRecords);
+        persistActionRecordsBySubCategory(actionRecords);
         bulkIncrementUnreadCounts(uniqueUserIds);
         return eligibleNotifications.stream().map(this::buildPeerValidationResponseEntry).toList();
     }
@@ -1459,6 +1459,7 @@ public class NotificationServiceImpl implements NotificationService {
     /**
      * Constructs the peer-validation action record, parsing the survey end-date and
      * serializing survey metadata to JSON for Cassandra storage.
+     * Includes sub_category for downstream routing to appropriate table.
      */
     private Map<String, Object> buildActionRecord(
             String notificationId, String userId, Map<String, Object> request,
@@ -1845,28 +1846,35 @@ public class NotificationServiceImpl implements NotificationService {
 
     /**
      * Marks a single notification as read for the given user.
-     * Validates the {@code created_at} field, persists the read status to Cassandra,
-     * triggers the peer-survey Kafka event, and returns a success response.
+     * Only processes notifications with category PEER_VALIDATION and sub_category PEER_EVALUATION_ASSIGNED.
      *
      * @param userId          the authenticated user's ID
      * @param request         the request payload; must contain {@code created_at} (ISO-8601)
      * @param response        the {@link ApiResponse} to populate
      * @param notificationIds list of notification IDs; first element is used as the target
-     * @return populated {@link ApiResponse} — 200 OK on success, 400 BAD_REQUEST if {@code created_at} is missing
+     * @param userNotifications list of user's notifications to search from
+     * @return populated {@link ApiResponse} — 200 OK on success, 400 BAD_REQUEST if validation fails
      */
-    private ApiResponse markIndividualNotificationAsRead(String userId, Map<String, Object> request, ApiResponse response, List<String> notificationIds) {
-        log.info("markIndividualNotificationAsRead: userId={}, notificationId={}", userId, notificationIds.isEmpty() ? "none" : notificationIds.get(0));
-        String createdAtStr = (String) request.get(CREATED_AT);
-        if (StringUtils.isBlank(createdAtStr)) {
-            updateErrorDetails(response, "Missing 'created_at' field", HttpStatus.BAD_REQUEST);
-            return response;
-        }
-        Instant createdAt = Instant.parse(createdAtStr);
+    private ApiResponse markIndividualNotificationAsRead(String userId, Map<String, Object> request, 
+            ApiResponse response, List<String> notificationIds, List<Map<String, Object>> userNotifications) {
         String notificationId = notificationIds.get(0);
         Instant now = Instant.now();
-        updateNotificationReadStatus(userId, createdAt, now);
-        publishPeerSurveyReadEvent(userId, notificationId, createdAt, now);
-        log.info("markIndividualNotificationAsRead: successfully marked notificationId={} as read for userId={}", notificationId, userId);
+        Optional<Map<String, Object>> notificationOpt = findNotificationById(userNotifications, notificationId);
+        if (notificationOpt.isEmpty()) {
+            log.warn("Notification not found: userId={}, notificationId={}", userId, notificationId);
+            return buildReadSuccessResponse(response, notificationId, now);
+        }
+        Map<String, Object> notification = notificationOpt.get();
+        if (!isPeerValidationEvaluationAssigned(notification)) {
+            return handleNonPeerValidationRead(userId, notification, request, response);
+        }
+        Instant createdAt = (Instant) request.get(CREATED_AT);
+        if (StringUtils.isNotBlank((String) request.get(STATUS))) {
+            handleStatusBasedAction(userId, notificationId, createdAt, now, (String) request.get(STATUS));
+        } else {
+            handleNormalReadFlow(userId, notificationId, createdAt, now);
+        }
+        log.info("Notification marked as read: userId={}, notificationId={}", userId, notificationId);
         return buildReadSuccessResponse(response, notificationId, now);
     }
 
@@ -2006,5 +2014,146 @@ public class NotificationServiceImpl implements NotificationService {
         event.put(USER_ID_FIELD, userId);
         event.put(Constants.TIMESTAMP, now.toEpochMilli());
         return event;
+    }
+
+    /**
+     * Finds a notification by its ID from a list of notifications.
+     *
+     * @param notifications  the list of notifications to search
+     * @param notificationId the target notification ID
+     * @return Optional containing the matched notification, or empty if not found
+     */
+    private Optional<Map<String, Object>> findNotificationById(List<Map<String, Object>> notifications, 
+            String notificationId) {
+        return notifications.stream()
+                .filter(n -> notificationId.equals(n.get(NOTIFICATION_ID)))
+                .findFirst();
+    }
+
+    /**
+     * Checks if a notification matches PEER_VALIDATION category and PEER_EVALUATION_ASSIGNED sub_category.
+     *
+     * @param notification the notification to check
+     * @return true if the notification matches the peer validation criteria
+     */
+    private boolean isPeerValidationEvaluationAssigned(Map<String, Object> notification) {
+        String category = (String) notification.get(CATEGORY);
+        String subCategory = (String) notification.get(SUB_CATEGORY);
+        return CATEGORY_PEER_VALIDATION.equalsIgnoreCase(category)
+                && SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory);
+    }
+
+    /**
+     * Handles status-based actions (e.g., NO, SKIP_FOR_NOW) by updating both tables.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      the notification's created_at timestamp
+     * @param now            the current timestamp
+     * @param status         the status to set (e.g., NO, SKIP_FOR_NOW)
+     */
+    private void handleStatusBasedAction(String userId, String notificationId, 
+            Instant createdAt, Instant now, String status) {
+        updateUserNotificationWithStatus(userId, createdAt, now, status);
+        updatePeerValidationRequestWithStatus(userId, notificationId, now, status);
+        log.info("Status updated: userId={}, notificationId={}, status={}", userId, notificationId, status);
+    }
+
+    /**
+     * Updates the user_notification table with status and read information.
+     */
+    private void updateUserNotificationWithStatus(String userId, Instant createdAt, Instant now, String status) {
+        cassandraOperation.updateRecord(
+                KEYSPACE_SUNBIRD,
+                TABLE_USER_NOTIFICATION,
+                Map.of(STATUS, status, READ, true, READ_AT, now, UPDATED_AT, now),
+                Map.of(USER_ID, userId, CREATED_AT, createdAt)
+        );
+    }
+
+    /**
+     * Updates the peer_validation_requests table with status and action timestamp.
+     */
+    private void updatePeerValidationRequestWithStatus(String userId, String notificationId, Instant now, String status) {
+        cassandraOperation.updateRecord(
+                KEYSPACE_SUNBIRD,
+                TABLE_PEER_VALIDATION_REQUESTS,
+                Map.of(STATUS, status, ACTION_AT, now, UPDATED_AT, now),
+                Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)
+        );
+    }
+
+    /**
+     * Handles the normal read flow - updates read status and publishes Kafka event.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      the notification's created_at timestamp
+     * @param now            the current timestamp
+     */
+    private void handleNormalReadFlow(String userId, String notificationId, Instant createdAt, Instant now) {
+        updateNotificationReadStatus(userId, createdAt, now);
+        publishPeerSurveyReadEvent(userId, notificationId, createdAt, now);
+    }
+
+    /**
+     * Handles read update for non-peer-validation notifications using the standard flow.
+     * Uses userId and createdAt as composite key to update notification as read in user_notification table only.
+     *
+     * @param userId       the authenticated user's ID
+     * @param notification the notification map containing notificationId
+     * @param request      the request map containing createdAt
+     * @param response     the response to populate
+     * @return populated ApiResponse with updated notifications
+     */
+    private ApiResponse handleNonPeerValidationRead(String userId, Map<String, Object> notification, 
+            Map<String, Object> request, ApiResponse response) {
+        String notificationId = (String) notification.get(NOTIFICATION_ID);
+        Instant createdAt = (Instant) request.get(CREATED_AT);
+        Instant now = Instant.now();
+        cassandraOperation.updateRecord(
+                KEYSPACE_SUNBIRD,
+                TABLE_USER_NOTIFICATION,
+                Map.of(READ, true, READ_AT, now),
+                Map.of(USER_ID, userId, CREATED_AT, createdAt)
+        );
+        List<Map<String, Object>> updated = List.of(Map.of(ID, notificationId, READ, true, READ_AT, now.toString()));
+        response.getParams().setErrMsg("Notifications updated successfully");
+        response.getParams().setStatus(Constants.SUCCESS);
+        response.setResponseCode(HttpStatus.OK);
+        response.setResult(Map.of(Constants.NOTIFICATIONS, updated));
+        log.info("Non-peer notification marked as read: userId={}, notificationId={}", userId, notificationId);
+        return response;
+    }
+
+    /**
+     * Routes action records to appropriate Cassandra tables based on sub_category.
+     * PEER_EVALUATION_ASSIGNED → peer_validation_requests table.
+     * PEER_REVIEW_ASSIGNED → peer_validation_reviews table.
+     * Creates copies without sub_category for insertion (does not mutate input).
+     */
+    private void persistActionRecordsBySubCategory(List<Map<String, Object>> actionRecords) {
+        List<Map<String, Object>> evaluationRecords = new ArrayList<>();
+        List<Map<String, Object>> reviewRecords = new ArrayList<>();
+        for (Map<String, Object> actionRecord : actionRecords) {
+            String subCategory = (String) actionRecord.get(SUB_CATEGORY);
+            if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                evaluationRecords.add(actionRecord);
+            } else if (SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                reviewRecords.add(actionRecord);
+            }
+            actionRecord.remove(SUB_CATEGORY);
+        }
+        insertActionRecordsIfNotEmpty(evaluationRecords, TABLE_PEER_VALIDATION_REQUESTS);
+        insertActionRecordsIfNotEmpty(reviewRecords, TABLE_PEER_VALIDATION_REVIEWS);
+    }
+
+    /**
+     * Inserts action records to the specified table if the list is not empty.
+     */
+    private void insertActionRecordsIfNotEmpty(List<Map<String, Object>> records, String tableName) {
+        if (CollectionUtils.isNotEmpty(records)) {
+            cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, tableName, records);
+        }
     }
 }
