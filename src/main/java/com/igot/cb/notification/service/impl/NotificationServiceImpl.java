@@ -2165,4 +2165,103 @@ public class NotificationServiceImpl implements NotificationService {
             cassandraOperation.insertBulkRecord(KEYSPACE_SUNBIRD, tableName, records);
         }
     }
+
+    /**
+     * Updates the status of peer evaluation records to APPROVED or REJECTED in both
+     * {@code user_notification} and {@code peer_validation_reviews} tables.
+     * <p>
+     * Skips the update if:
+     * <ul>
+     *   <li>the status is not APPROVED or REJECTED</li>
+     *   <li>the record does not exist in either table</li>
+     *   <li>the record is already APPROVED or REJECTED</li>
+     * </ul>
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      ISO-8601 created_at of the user_notification record
+     * @param status         APPROVED or REJECTED
+     */
+    @Override
+    public void updatePeerEvaluationStatus(String userId, String notificationId, String createdAt, String status) {
+        log.info("Updating peer evaluation status to '{}' for user: {}, notificationId: {}",
+                status, userId, notificationId);
+        try {
+            if (!Constants.STATUS_APPROVED.equalsIgnoreCase(status) &&
+                    !Constants.STATUS_REJECTED.equalsIgnoreCase(status)) {
+                log.warn("Invalid status '{}' for peer evaluation update. Only APPROVED or REJECTED are allowed.", status);
+                return;
+            }
+            Instant createdAtInstant = Instant.parse(createdAt);
+
+            if (validateRecordExistsAndNotEvaluated(
+                    Constants.TABLE_PEER_VALIDATION_REVIEWS,
+                    Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId),
+                    "Peer evaluation review record", notificationId)) {
+                return;
+            }
+            if (validateRecordExistsAndNotEvaluated(
+                    Constants.TABLE_USER_NOTIFICATION,
+                    Map.of(USER_ID, userId, CREATED_AT, createdAtInstant),
+                    "User notification", notificationId)) {
+                return;
+            }
+
+            updatePeerEvaluationReviewTable(userId, notificationId, status);
+            updatePeerEvaluationUserNotificationTable(userId, createdAtInstant, status);
+            log.info("Successfully updated peer evaluation status to '{}' for notificationId: {}", status, notificationId);
+        } catch (DateTimeParseException e) {
+            log.error("Invalid createdAt timestamp format '{}' for notificationId: {}", createdAt, notificationId, e);
+        } catch (Exception e) {
+            log.error("Error updating peer evaluation status for notificationId {}: {}", notificationId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Returns {@code true} if the update should be skipped: the record was not found
+     * or it is already APPROVED or REJECTED.
+     */
+    private boolean validateRecordExistsAndNotEvaluated(String tableName, Map<String, Object> queryParams,
+                                                         String recordType, String notificationId) {
+        List<Map<String, Object>> records = cassandraOperation.getRecordsByProperties(
+                Constants.KEYSPACE_SUNBIRD, tableName, queryParams, List.of(STATUS), 1);
+        if (CollectionUtils.isEmpty(records)) {
+            log.error("{} not found for query: {}", recordType, queryParams);
+            return true;
+        }
+        String currentStatus = (String) records.get(0).get(STATUS);
+        if (Constants.STATUS_APPROVED.equalsIgnoreCase(currentStatus) ||
+                Constants.STATUS_REJECTED.equalsIgnoreCase(currentStatus)) {
+            log.info("{} already has terminal status '{}' for notificationId: {}, skipping update",
+                    recordType, currentStatus, notificationId);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Updates the status in {@code peer_validation_reviews} for the given user and notification.
+     */
+    private void updatePeerEvaluationReviewTable(String userId, String notificationId, String status) {
+        cassandraOperation.updateRecord(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_PEER_VALIDATION_REVIEWS,
+                Map.of(STATUS, status, UPDATED_AT, Instant.now()),
+                Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)
+        );
+        log.info("Updated peer_validation_reviews status to '{}' for notificationId: {}", status, notificationId);
+    }
+
+    /**
+     * Updates the status in {@code user_notification} for the given user and created_at key.
+     */
+    private void updatePeerEvaluationUserNotificationTable(String userId, Instant createdAt, String status) {
+        cassandraOperation.updateRecord(
+                Constants.KEYSPACE_SUNBIRD,
+                Constants.TABLE_USER_NOTIFICATION,
+                Map.of(STATUS, status, UPDATED_AT, Instant.now()),
+                Map.of(USER_ID, userId, CREATED_AT, createdAt)
+        );
+        log.info("Updated user_notification status to '{}' for userId: {}", status, userId);
+    }
 }

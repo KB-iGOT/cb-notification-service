@@ -57,4 +57,15 @@ public interface NotificationService {
      */
     void updatePeerValidationStatusToSubmitted(String userId, String notificationId, String createdAt, String subCategory);
 
+    /**
+     * Updates the status of peer evaluation records to APPROVED or REJECTED in both
+     * {@code user_notification} and {@code peer_validation_reviews} tables based on a Kafka event.
+     *
+     * @param userId         the user ID
+     * @param notificationId the notification ID
+     * @param createdAt      the created_at timestamp of the user_notification record (ISO-8601)
+     * @param status         the new status — must be {@code APPROVED} or {@code REJECTED}
+     */
+    void updatePeerEvaluationStatus(String userId, String notificationId, String createdAt, String status);
+
 }

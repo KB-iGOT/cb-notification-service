@@ -64,4 +64,10 @@ public class CbServerProperties {
 
   @Value("${peervalidation.bulk.created.at.offset.ms}")
   private long peerValidationBulkCreatedAtOffsetMs;
+
+  @Value("${kafka.topic.process.peer.evaluation.error}")
+  private String kafkaTopicPeerEvaluationError;
+
+  @Value("${kafka.topic.notification.bulk.create.error}")
+  private String kafkaTopicNotificationBulkCreateError;
 }
