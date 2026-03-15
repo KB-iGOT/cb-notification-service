@@ -518,6 +518,9 @@ public class Constants {
     public static final String SUB_CATEGORY_PEER_EVALUATION_ASSIGNED = "PEER_EVALUATION_ASSIGNED";
     public static final String SUB_CATEGORY_PEER_REVIEW_ASSIGNED = "PEER_REVIEW_ASSIGNED";
     public static final String STATUS_SUBMITTED = "SUBMITTED";
+    public static final String STATUS_APPROVED = "APPROVED";
+    public static final String STATUS_REJECTED = "REJECTED";
+    public static final String STATUS_FIELD = "status";
     public static final String USER_ID_FIELD = "userId";
     public static final String NOTIFICATION_ID_FIELD = "notificationId";
     public static final String CREATED_AT_FIELD = "createdAt";
