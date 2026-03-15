@@ -1369,6 +1369,8 @@ public class NotificationServiceImpl implements NotificationService {
                 cbServerProperties.isPeerValidationNotificationSettingCheckEnabled()
                         ? fetchUserNotificationSettings(requestList)
                         : Collections.emptyMap();
+        Instant baseTime = Instant.now();
+        int recordIndex = 0;
         for (Map<String, Object> request : requestList) {
             String userId = (String) request.get(USER_ID);
             String notificationType = (String) request.get(TYPE);
@@ -1378,7 +1380,11 @@ public class NotificationServiceImpl implements NotificationService {
                         SUB_CATEGORY, request.get(SUB_CATEGORY), REASON, NOTIFICATION_TYPE_DISABLED));
                 continue;
             }
-            buildRecordsForRequest(request, userId, notificationType, eligibleNotifications, actionRecords, failures);
+            // so Cassandra's (user_id, created_at) composite key is unique per row.
+            // Cassandra timestamp has millisecond precision, so sub-ms offsets would be truncated and collide.
+            Instant createdAt = baseTime.plusMillis(recordIndex * cbServerProperties.getPeerValidationBulkCreatedAtOffsetMs());
+            buildRecordsForRequest(request, userId, notificationType, eligibleNotifications, actionRecords, failures, createdAt);
+            recordIndex++;
         }
         log.info("Built {} notification records, {} skipped, {} failures",
                 eligibleNotifications.size(), skipped.size(), failures.size());
@@ -1399,23 +1405,26 @@ public class NotificationServiceImpl implements NotificationService {
     /**
      * Builds one notification record and one action record for a single user request.
      * On failure, adds an error entry to {@code failures} instead of propagating the exception.
+     *
+     * @param createdAt a pre-generated, per-record unique timestamp; prevents
+     *                  {@code created_at} collisions on Cassandra's (user_id, created_at) composite key
      */
     private void buildRecordsForRequest(
             Map<String, Object> request, String userId, String notificationType,
             List<Map<String, Object>> eligibleNotifications,
             List<Map<String, Object>> actionRecords,
-            List<Map<String, Object>> failures) {
+            List<Map<String, Object>> failures,
+            Instant createdAt) {
         try {
             Map<String, Object> message = (Map<String, Object>) request.get(MESSAGE);
             List<Map<String, Object>> dataList = (List<Map<String, Object>>) message.get(DATA);
             Map<String, Object> surveyData = dataList.get(0);
-            Instant now = Instant.now();
             String notificationId = java.util.UUID.randomUUID().toString();
 
             Map<String, Object> notificationRecord = buildNotificationRecord(
-                    notificationId, userId, notificationType, request, now);
+                    notificationId, userId, notificationType, request, createdAt);
             Map<String, Object> actionRecord = buildActionRecord(
-                    notificationId, userId, request, surveyData, now);
+                    notificationId, userId, request, surveyData, createdAt);
 
             eligibleNotifications.add(notificationRecord);
             actionRecords.add(actionRecord);

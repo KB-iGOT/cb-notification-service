@@ -61,4 +61,7 @@ public class CbServerProperties {
 
   @Value("${kafka.topic.notification.read.event}")
   private String kafkaTopicNotificationReadEvent;
+
+  @Value("${peervalidation.bulk.created.at.offset.ms}")
+  private long peerValidationBulkCreatedAtOffsetMs;
 }
