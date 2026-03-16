@@ -1480,7 +1480,6 @@ public class NotificationServiceImpl implements NotificationService {
         actionMap.put(USER_ID, userId);
         actionMap.put(SUB_CATEGORY, request.get(SUB_CATEGORY));
         actionMap.put(SURVEY_END_DATE, surveyEndDate);
-        actionMap.put(ACTION_AT, null);
         actionMap.put(METADATA, objectMapper.writeValueAsString(surveyData));
         actionMap.put(CREATED_AT, now);
         actionMap.put(STATUS, STATUS_PENDING);
@@ -1660,14 +1659,13 @@ public class NotificationServiceImpl implements NotificationService {
 
     /**
      * Returns a copy of the record with all {@link Instant} date fields ({@code created_at},
-     * {@code survey_end_date}, {@code action_at}, {@code updated_at}) converted to ISO-8601 strings for the API response.
+     * {@code survey_end_date}, {@code updated_at}) converted to ISO-8601 strings for the API response.
      * Also deserializes the {@code metadata} field from JSON string to object.
      */
     private Map<String, Object> serializePeerValidationRecord(Map<String, Object> sourceRecord) {
         Map<String, Object> entry = new HashMap<>(sourceRecord);
         serializeInstantField(entry, CREATED_AT);
         serializeInstantField(entry, SURVEY_END_DATE);
-        serializeInstantField(entry, ACTION_AT);
         serializeInstantField(entry, UPDATED_AT);
         deserializeJsonField(entry);
         return entry;
@@ -2072,7 +2070,7 @@ public class NotificationServiceImpl implements NotificationService {
         cassandraOperation.updateRecord(
                 KEYSPACE_SUNBIRD,
                 TABLE_PEER_VALIDATION_REQUESTS,
-                Map.of(STATUS, status, ACTION_AT, now, UPDATED_AT, now),
+                Map.of(STATUS, status, UPDATED_AT, now),
                 Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)
         );
     }
