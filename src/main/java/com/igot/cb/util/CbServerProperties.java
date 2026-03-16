@@ -1,5 +1,6 @@
 package com.igot.cb.util;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
@@ -70,4 +71,10 @@ public class CbServerProperties {
 
   @Value("${kafka.topic.notification.bulk.create.error}")
   private String kafkaTopicNotificationBulkCreateError;
+
+  @Value("#{'${notification.list.peer.evaluation.assigned.excluded.statuses}'.split(',')}")
+  private List<String> peerEvaluationAssignedExcludedStatuses;
+
+  @Value("#{'${notification.list.peer.review.assigned.excluded.statuses}'.split(',')}")
+  private List<String> peerReviewAssignedExcludedStatuses;
 }
