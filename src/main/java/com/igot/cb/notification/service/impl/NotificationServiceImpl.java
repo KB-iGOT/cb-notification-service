@@ -1855,6 +1855,10 @@ public class NotificationServiceImpl implements NotificationService {
             return buildReadSuccessResponse(response, notificationId, now);
         }
         Map<String, Object> notification = notificationOpt.get();
+        if (Boolean.TRUE.equals(notification.get(READ))) {
+            log.info("Notification already read: userId={}, notificationId={}", userId, notificationId);
+            return buildAlreadyReadResponse(response, notificationId);
+        }
         if (!isPeerValidationEvaluationAssigned(notification)) {
             return handleNonPeerValidationRead(userId, notification, request, response);
         }
@@ -2347,5 +2351,22 @@ public class NotificationServiceImpl implements NotificationService {
     private boolean isStatusAllowed(Map<String, Object> notifRecord, Set<String> exclusionSet) {
         String status = (String) notifRecord.get(STATUS);
         return StringUtils.isBlank(status) || !exclusionSet.contains(status);
+    }
+
+        /**
+     * Assembles a 200 OK {@link ApiResponse} indicating the notification was already read.
+     *
+     * @param response       the response object to populate
+     * @param notificationId the ID of the notification that was already read
+     * @return the populated {@link ApiResponse}
+     */
+    private ApiResponse buildAlreadyReadResponse(ApiResponse response, String notificationId) {
+        response.getParams().setErrMsg("Notification is already marked as read");
+        response.getParams().setStatus(Constants.SUCCESS);
+        response.setResponseCode(HttpStatus.OK);
+        response.setResult(Map.of(Constants.NOTIFICATIONS, List.of(
+                Map.of(ID, notificationId, READ, true)
+        )));
+        return response;
     }
 }

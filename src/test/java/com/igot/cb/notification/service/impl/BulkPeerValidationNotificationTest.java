@@ -3,6 +3,7 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.notification.entity.NotificationSettingEntity;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
+import com.igot.cb.producer.Producer;
 import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 
@@ -42,6 +43,9 @@ class BulkPeerValidationNotificationTest {
 
     @Mock
     private CbServerProperties cbServerProperties;
+
+    @Mock
+    private Producer producer;
 
     private final ObjectMapper realMapper = new ObjectMapper();
 
@@ -790,6 +794,115 @@ class BulkPeerValidationNotificationTest {
             Map<?, ?> result = (Map<?, ?>) res.getResult();
             assertEquals(0, result.get(Constants.TOTAL_COUNT));
             assertTrue(((List<?>) result.get(NOTIFICATIONS)).isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Mark as read — idempotency guard")
+    class MarkAsReadIdempotencyTests {
+        private static final String V2_TOKEN = "v2-auth-token";
+        private static final String V2_USER_ID = "v2-user-abc";
+        private static final String NOTIF_ID = "notif-id-001";
+
+        @BeforeEach
+        void setUp() {
+            when(accessTokenValidator.fetchUserIdFromAccessToken(V2_TOKEN)).thenReturn(V2_USER_ID);
+        }
+
+        private Map<String, Object> buildNotification(boolean read, String category, String subCategory) {
+            Map<String, Object> notif = new HashMap<>();
+            notif.put(NOTIFICATION_ID, MarkAsReadIdempotencyTests.NOTIF_ID);
+            notif.put(READ, read);
+            notif.put(CATEGORY, category);
+            notif.put(SUB_CATEGORY, subCategory);
+            notif.put(CREATED_AT, Instant.now().minusSeconds(60));
+            return notif;
+        }   
+
+        private Map<String, Object> buildMarkReadRequest() {
+            Map<String, Object> request = new HashMap<>();
+            request.put(TYPE, Constants.INDIVIDUAL);
+            request.put(IDS, List.of(MarkAsReadIdempotencyTests.NOTIF_ID));
+            request.put(CREATED_AT, Instant.now().minusSeconds(60));
+            return request;
+        }
+
+        @Test
+        @DisplayName("already-read PEER_VALIDATION notification → 200 OK with 'already marked' message")
+        void alreadyRead_peerValidation_returnsAlreadyMarkedResponse() {
+            Map<String, Object> alreadyRead = buildNotification(
+                    true, Constants.CATEGORY_PEER_VALIDATION, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED);
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(alreadyRead));
+            ApiResponse res = notificationService.markNotificationsAsRead(
+                    V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            assertEquals("Notification is already marked as read", res.getParams().getErrMsg());
+            List<?> notifications = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, notifications.size());
+            assertEquals(true, ((Map<?, ?>) notifications.get(0)).get(READ));
+        }
+
+        @Test
+        @DisplayName("already-read notification → no Cassandra updateRecord invoked")
+        void alreadyRead_peerValidation_noCassandraWrite() {
+            Map<String, Object> alreadyRead = buildNotification(
+                    true, Constants.CATEGORY_PEER_VALIDATION, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED);
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(alreadyRead));
+            notificationService.markNotificationsAsRead(
+                    V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
+            verify(cassandraOperation, never()).updateRecord(
+                    anyString(), anyString(), anyMap(), anyMap());
+        }
+
+        @Test
+        @DisplayName("already-read non-peer notification → 200 OK with 'already marked' message")
+        void alreadyRead_nonPeerValidation_returnsAlreadyMarkedResponse() {
+            Map<String, Object> alreadyRead = buildNotification(
+                    true, "OTHER_CATEGORY", "OTHER_SUB");
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(alreadyRead));
+            ApiResponse res = notificationService.markNotificationsAsRead(
+                    V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            assertEquals("Notification is already marked as read", res.getParams().getErrMsg());
+        }
+
+        @Test
+        @DisplayName("unread notification → Cassandra updateRecord is called and response is 200 OK")
+        void unread_peerValidation_normalFlowProceedsAndUpdatesDb() {
+            Map<String, Object> unread = buildNotification(
+                    false, Constants.CATEGORY_PEER_VALIDATION, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED);
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(unread));
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyList(), eq(1)))
+                    .thenReturn(Collections.emptyList());
+            when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                    .thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));
+            ApiResponse res = notificationService.markNotificationsAsRead(
+                    V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            verify(cassandraOperation, atLeastOnce()).updateRecord(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+        }
+
+        @Test
+        @DisplayName("notification not found in user list → treated as success (no write)")
+        void notificationNotFound_returnsSuccessWithNoWrite() {
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), eq(100)))
+                    .thenReturn(Collections.emptyList());
+            ApiResponse res = notificationService.markNotificationsAsRead(
+                    V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            verify(cassandraOperation, never()).updateRecord(
+                    anyString(), anyString(), anyMap(), anyMap());
         }
     }
 
