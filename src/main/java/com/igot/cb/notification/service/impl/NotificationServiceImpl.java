@@ -1606,9 +1606,10 @@ public class NotificationServiceImpl implements NotificationService {
 
             int maxFetch = cbServerProperties.getPeerValidationListMaxFetch();
             Instant fromDate = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days).toInstant();
+            List<String> excludedStatuses = resolveExcludedStatusesForSubType(subType);
 
             List<Map<String, Object>> records = fetchPeerValidationRecords(tableName, userId, maxFetch);
-            List<Map<String, Object>> filtered = filterSortAndLimit(records, fromDate);
+            List<Map<String, Object>> filtered = filterSortAndLimit(records, fromDate, excludedStatuses);
 
             int total = filtered.size();
             int fromIndex = Math.min(page * size, total);
@@ -1655,26 +1656,6 @@ public class NotificationServiceImpl implements NotificationService {
                 null,
                 maxFetch
         );
-    }
-
-    /**
-     * Retains only records within the {@code fromDate} window, excludes SUBMITTED status, and sorts them newest-first.
-     */
-    private List<Map<String, Object>> filterSortAndLimit(
-            List<Map<String, Object>> records, Instant fromDate) {
-        return records.stream()
-                .filter(r -> {
-                    Instant createdAt = getInstant(r.get(CREATED_AT));
-                    if (ObjectUtils.isEmpty(createdAt) || createdAt.isBefore(fromDate)) {
-                        return false;
-                    }
-                    String status = (String) r.get(STATUS);
-                    return !Constants.STATUS_SUBMITTED.equalsIgnoreCase(status);
-                })
-                .sorted(Comparator.comparing(
-                        r -> getInstant(r.get(CREATED_AT)),
-                        Comparator.reverseOrder()))
-                .toList();
     }
 
     /**
@@ -2263,5 +2244,108 @@ public class NotificationServiceImpl implements NotificationService {
                 Map.of(USER_ID, userId, CREATED_AT, createdAt)
         );
         log.info("Updated user_notification status to '{}' for userId: {}", status, userId);
+    }
+
+    /**
+     * Returns the configured list of statuses to exclude from the peer-validation list
+     * response, based on the given subType.
+     * <ul>
+     *   <li>{@code PEER_EVALUATION_ASSIGNED} → e.g. {@code ["SUBMITTED", "IGNORED"]}</li>
+     *   <li>{@code PEER_REVIEW_ASSIGNED} → e.g. {@code ["APPROVED", "REJECTED"]}</li>
+     * </ul>
+     *
+     * @param subType the peer-validation sub-type string
+     * @return list of status strings to exclude; never {@code null}
+     */
+    private List<String> resolveExcludedStatusesForSubType(String subType) {
+        log.debug("Resolving excluded statuses for subType={}", subType);
+        if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subType)) {
+            return cbServerProperties.getPeerEvaluationAssignedExcludedStatuses();
+        }
+        return cbServerProperties.getPeerReviewAssignedExcludedStatuses();
+    }
+
+    /**
+     * Applies in-memory expiry marking, filters, sorts, and returns the processed records.
+     * <p>
+     * Pipeline (in order):
+     * <ol>
+     *   <li>Mark each PENDING record whose {@code survey_end_date} is in the past as {@code EXPIRED}
+     *       (in-memory only — no Cassandra write).</li>
+     *   <li>Exclude records whose {@code created_at} is before {@code fromDate}.</li>
+     *   <li>Exclude records whose {@code status} is in {@code excludedStatuses}.</li>
+     *   <li>Sort survivors by {@code created_at} ascending (oldest first).</li>
+     * </ol>
+     *
+     * @param records          raw records fetched from Cassandra
+     * @param fromDate         lower-bound cutoff; records created before this instant are excluded
+     * @param excludedStatuses status values to filter out; may be {@code null} or empty
+     * @return filtered, sorted list — never {@code null}
+     */
+    private List<Map<String, Object>> filterSortAndLimit(
+            List<Map<String, Object>> records, Instant fromDate, List<String> excludedStatuses) {
+        log.debug("filterSortAndLimit: input={} records, fromDate={}, excludedStatuses={}",
+                records.size(), fromDate, excludedStatuses);
+        Set<String> exclusionSet = CollectionUtils.isEmpty(excludedStatuses)
+                ? Collections.emptySet() : new HashSet<>(excludedStatuses);
+        Instant now = Instant.now();
+        records.forEach(r -> markAsExpiredIfEligible(r, now));
+        List<Map<String, Object>> result = records.stream()
+                .filter(r -> isWithinDateWindow(r, fromDate) && isStatusAllowed(r, exclusionSet))
+                .sorted(Comparator.comparing(r -> getInstant(r.get(CREATED_AT))))
+                .toList();
+        log.debug("filterSortAndLimit: output={} records after filtering and sorting", result.size());
+        return result;
+    }
+
+    /**
+     * Mutates a single record in-memory by setting its {@code status} to {@code EXPIRED}
+     * when all of the following hold:
+     * <ul>
+     *   <li>The current status is {@code PENDING} (case-insensitive).</li>
+     *   <li>A {@code survey_end_date} is present on the record.</li>
+     *   <li>{@code survey_end_date} is strictly before {@code now}.</li>
+     * </ul>
+     * Non-PENDING records are skipped immediately. No Cassandra write is performed.
+     *
+     * @param record the peer-validation record map to evaluate and potentially mutate
+     * @param now    the reference instant used as the expiry threshold
+     */
+    private void markAsExpiredIfEligible(Map<String, Object> record, Instant now) {
+        if (!Constants.STATUS_PENDING.equalsIgnoreCase((String) record.get(STATUS))) {
+            return;
+        }
+        Instant surveyEndDate = getInstant(record.get(SURVEY_END_DATE));
+        if (!ObjectUtils.isEmpty(surveyEndDate) && surveyEndDate.isBefore(now)) {
+            record.put(STATUS, Constants.STATUS_EXPIRED);
+            log.info("Marked record as EXPIRED in-memory: userId={}, notificationId={}",
+                    record.get(USER_ID), record.get(NOTIFICATION_ID));
+        }
+    }
+
+    /**
+     * Returns {@code true} if the record's {@code created_at} is on or after {@code fromDate}.
+     * Records with a missing or unparseable {@code created_at} are excluded.
+     *
+     * @param notifRecord the peer-validation record map
+     * @param fromDate    the lower-bound cutoff instant
+     * @return {@code true} if the record falls within the requested date window
+     */
+    private boolean isWithinDateWindow(Map<String, Object> notifRecord, Instant fromDate) {
+        Instant createdAt = getInstant(notifRecord.get(CREATED_AT));
+        return !ObjectUtils.isEmpty(createdAt) && !createdAt.isBefore(fromDate);
+    }
+
+    /**
+     * Returns {@code true} if the record's {@code status} is not present in the exclusion set.
+     * A {@code null} status is treated as allowed.
+     *
+     * @param notifRecord  the peer-validation record map
+     * @param exclusionSet set of status strings to reject; must not be {@code null}
+     * @return {@code true} if the status is absent from the exclusion set
+     */
+    private boolean isStatusAllowed(Map<String, Object> notifRecord, Set<String> exclusionSet) {
+        String status = (String) notifRecord.get(STATUS);
+        return StringUtils.isBlank(status) || !exclusionSet.contains(status);
     }
 }

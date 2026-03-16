@@ -590,4 +590,207 @@ class BulkPeerValidationNotificationTest {
         assertEquals(1, reviewCaptor.getValue().size());
         assertEquals(USER_2, reviewCaptor.getValue().get(0).get(USER_ID));
     }
+
+    @Nested
+    @DisplayName("Get peer validation notifications list")
+    class GetPeerValidationListTests {
+        private static final String TEST_TOKEN = "list-test-token";
+        private static final String TEST_USER_ID = "list-user-abc";
+        @BeforeEach
+        void setUp() {
+            when(accessTokenValidator.fetchUserIdFromAccessToken(TEST_TOKEN)).thenReturn(TEST_USER_ID);
+            when(cbServerProperties.getPeerValidationListMaxFetch()).thenReturn(100);
+            when(cbServerProperties.getPeerEvaluationAssignedExcludedStatuses())
+                    .thenReturn(List.of("SUBMITTED", "IGNORED"));
+            when(cbServerProperties.getPeerReviewAssignedExcludedStatuses())
+                    .thenReturn(List.of("APPROVED", "REJECTED"));
+        }
+        private Map<String, Object> buildRecord(String status, Instant createdAt) {
+            Map<String, Object> r = new HashMap<>();
+            r.put(Constants.STATUS, status);
+            r.put(Constants.CREATED_AT, createdAt);
+            r.put(Constants.USER_ID, TEST_USER_ID);
+            r.put(NOTIFICATION_ID, java.util.UUID.randomUUID().toString());
+            return r;
+        }
+        private Map<String, Object> buildRecordWithSurveyEndDate(String status, Instant createdAt, Instant surveyEndDate) {
+            Map<String, Object> r = buildRecord(status, createdAt);
+            r.put(Constants.SURVEY_END_DATE, surveyEndDate);
+            return r;
+        }
+        @Test
+        @DisplayName("invalid auth token → BAD_REQUEST")
+        void invalidAuthToken_returnsBadRequest() {
+            when(accessTokenValidator.fetchUserIdFromAccessToken(TEST_TOKEN)).thenReturn("");
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            assertEquals(HttpStatus.BAD_REQUEST, res.getResponseCode());
+        }
+        @Test
+        @DisplayName("unknown subType → BAD_REQUEST")
+        void unknownSubType_returnsBadRequest() {
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, "UNKNOWN_TYPE", 7, 0, 10);
+            assertEquals(HttpStatus.BAD_REQUEST, res.getResponseCode());
+        }
+        @Test
+        @DisplayName("PEER_EVALUATION_ASSIGNED excludes SUBMITTED and IGNORED statuses")
+        void peerEvaluationAssigned_excludesSubmittedAndIgnoredStatuses() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecord("PENDING", now.minusSeconds(10)),
+                            buildRecord("SUBMITTED", now.minusSeconds(20)),
+                            buildRecord("IGNORED", now.minusSeconds(30))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("PENDING", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("PEER_REVIEW_ASSIGNED excludes APPROVED and REJECTED statuses")
+        void peerReviewAssigned_excludesApprovedAndRejectedStatuses() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REVIEWS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecord("PENDING", now.minusSeconds(10)),
+                            buildRecord("APPROVED", now.minusSeconds(20)),
+                            buildRecord("REJECTED", now.minusSeconds(30))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_REVIEW_ASSIGNED, 7, 0, 10);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("PENDING", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("SUBMITTED status is excluded — status values from DB are uppercase")
+        void submittedStatus_isExcluded() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecord("SUBMITTED", now.minusSeconds(10)),
+                            buildRecord("PENDING", now.minusSeconds(20))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("PENDING", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("PENDING record with expired survey_end_date is marked EXPIRED in response")
+        void pendingRecord_withExpiredSurveyEndDate_isMarkedExpiredInResponse() {
+            Instant now = Instant.now();
+            when(cbServerProperties.getPeerEvaluationAssignedExcludedStatuses())
+                    .thenReturn(Collections.emptyList());
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecordWithSurveyEndDate("PENDING", now.minusSeconds(10),
+                                    now.minus(1, ChronoUnit.DAYS))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals(Constants.STATUS_EXPIRED, ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("PENDING record with future survey_end_date remains PENDING")
+        void pendingRecord_withFutureSurveyEndDate_remainsPending() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecordWithSurveyEndDate("PENDING", now.minusSeconds(10),
+                                    now.plus(7, ChronoUnit.DAYS))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("PENDING", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("non-PENDING record with expired survey_end_date status is unchanged")
+        void nonPendingRecord_withExpiredSurveyEndDate_statusUnchanged() {
+            Instant now = Instant.now();
+            when(cbServerProperties.getPeerEvaluationAssignedExcludedStatuses())
+                    .thenReturn(Collections.emptyList());
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecordWithSurveyEndDate("SUBMITTED", now.minusSeconds(10),
+                                    now.minus(1, ChronoUnit.DAYS))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("SUBMITTED", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("EXPIRED status is filtered out when EXPIRED is in exclusion config")
+        void expiredStatus_isFiltered_whenInExclusionConfig() {
+            Instant now = Instant.now();
+            when(cbServerProperties.getPeerEvaluationAssignedExcludedStatuses())
+                    .thenReturn(List.of("SUBMITTED", "IGNORED", "EXPIRED"));
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecordWithSurveyEndDate("PENDING", now.minusSeconds(10),
+                                    now.minus(1, ChronoUnit.DAYS)),
+                            buildRecord("PENDING", now.minusSeconds(20))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            List<?> list = (List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS);
+            assertEquals(1, list.size());
+            assertEquals("PENDING", ((Map<?, ?>) list.get(0)).get(Constants.STATUS));
+        }
+        @Test
+        @DisplayName("records outside day window are excluded")
+        void recordsOutsideDayWindow_areExcluded() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecord("PENDING", now.minusSeconds(60)),
+                            buildRecord("PENDING", now.minus(30, ChronoUnit.DAYS))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            assertEquals(1, ((List<?>) ((Map<?, ?>) res.getResult()).get(NOTIFICATIONS)).size());
+        }
+        @Test
+        @DisplayName("pagination returns correct page subset and total count")
+        void pagination_returnsCorrectSubsetAndTotalCount() {
+            Instant now = Instant.now();
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(List.of(
+                            buildRecord("PENDING", now.minusSeconds(10)),
+                            buildRecord("PENDING", now.minusSeconds(20)),
+                            buildRecord("PENDING", now.minusSeconds(30))));
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 1, 1);
+            Map<?, ?> result = (Map<?, ?>) res.getResult();
+            assertEquals(3, result.get(Constants.TOTAL_COUNT));
+            assertEquals(1, ((List<?>) result.get(NOTIFICATIONS)).size());
+        }
+        @Test
+        @DisplayName("no records returns OK with empty list and zero total")
+        void noRecords_returnsOkWithEmptyListAndZeroTotal() {
+            when(cassandraOperation.getRecordsByProperties(
+                    eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), isNull(), eq(100)))
+                    .thenReturn(Collections.emptyList());
+            ApiResponse res = notificationService.getPeerValidationNotifications(
+                    TEST_TOKEN, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED, 7, 0, 10);
+            assertEquals(HttpStatus.OK, res.getResponseCode());
+            Map<?, ?> result = (Map<?, ?>) res.getResult();
+            assertEquals(0, result.get(Constants.TOTAL_COUNT));
+            assertTrue(((List<?>) result.get(NOTIFICATIONS)).isEmpty());
+        }
+    }
+
 }
