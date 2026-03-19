@@ -1573,13 +1573,9 @@ public class NotificationServiceImpl implements NotificationService {
         if (!(firstEntry instanceof Map)) return ERR_MESSAGE_DATA_REQUIRED;
         Map<String, Object> surveyData = (Map<String, Object>) firstEntry;
 
-        String surveyEndDateStr = Objects.toString(surveyData.get(SURVEY_END_DATE_KEY), null);
-        if (StringUtils.isBlank(surveyEndDateStr)) return ERR_SURVEY_END_DATE_REQUIRED;
-        try {
-            Instant.parse(surveyEndDateStr);
-        } catch (Exception e) {
-            log.warn("Invalid surveyEndDate format: {}", surveyEndDateStr);
-            return ERR_SURVEY_END_DATE_FORMAT;
+        if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategoryStr)
+                || SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategoryStr)) {
+            return validateSurveyEndDate(surveyData);
         }
         return null;
     }
@@ -2294,7 +2290,7 @@ public class NotificationServiceImpl implements NotificationService {
         records.forEach(r -> markAsExpiredIfEligible(r, now));
         List<Map<String, Object>> result = records.stream()
                 .filter(r -> isWithinDateWindow(r, fromDate) && isStatusAllowed(r, exclusionSet))
-                .sorted(Comparator.comparing(r -> getInstant(r.get(CREATED_AT))))
+                .sorted(Comparator.comparing(r -> getInstant(r.get(SURVEY_END_DATE))))
                 .toList();
         log.debug("filterSortAndLimit: output={} records after filtering and sorting", result.size());
         return result;
@@ -2313,15 +2309,15 @@ public class NotificationServiceImpl implements NotificationService {
      * @param record the peer-validation record map to evaluate and potentially mutate
      * @param now    the reference instant used as the expiry threshold
      */
-    private void markAsExpiredIfEligible(Map<String, Object> record, Instant now) {
-        if (!Constants.STATUS_PENDING.equalsIgnoreCase((String) record.get(STATUS))) {
+    private void markAsExpiredIfEligible(Map<String, Object> notifRecord, Instant now) {
+        if (!Constants.STATUS_PENDING.equalsIgnoreCase((String) notifRecord.get(STATUS))) {
             return;
         }
-        Instant surveyEndDate = getInstant(record.get(SURVEY_END_DATE));
+        Instant surveyEndDate = getInstant(notifRecord.get(SURVEY_END_DATE));
         if (!ObjectUtils.isEmpty(surveyEndDate) && surveyEndDate.isBefore(now)) {
-            record.put(STATUS, Constants.STATUS_EXPIRED);
+            notifRecord.put(STATUS, Constants.STATUS_EXPIRED);
             log.info("Marked record as EXPIRED in-memory: userId={}, notificationId={}",
-                    record.get(USER_ID), record.get(NOTIFICATION_ID));
+                    notifRecord.get(USER_ID), notifRecord.get(NOTIFICATION_ID));
         }
     }
 
@@ -2367,4 +2363,23 @@ public class NotificationServiceImpl implements NotificationService {
         )));
         return response;
     }
+
+    /**
+     * Validates the presence and ISO-8601 format of the {@code survey_end_date} field in the input map.
+     *
+     * @param surveyData the input map containing survey data
+     * @return {@code null} if validation passes; otherwise, an error message string describing the failure
+     */
+    private String validateSurveyEndDate(Map<String, Object> surveyData) {
+        String surveyEndDateStr = Objects.toString(surveyData.get(SURVEY_END_DATE_KEY), null);
+        if (StringUtils.isBlank(surveyEndDateStr)) return ERR_SURVEY_END_DATE_REQUIRED;
+        try {
+            Instant.parse(surveyEndDateStr);
+            return null;
+        } catch (Exception e) {
+            log.warn("Invalid surveyEndDate format: {}", surveyEndDateStr);
+            return ERR_SURVEY_END_DATE_FORMAT;
+        }
+    }
+
 }

@@ -613,6 +613,7 @@ class BulkPeerValidationNotificationTest {
             Map<String, Object> r = new HashMap<>();
             r.put(Constants.STATUS, status);
             r.put(Constants.CREATED_AT, createdAt);
+            r.put(Constants.SURVEY_END_DATE, createdAt.plusSeconds(86400));
             r.put(Constants.USER_ID, TEST_USER_ID);
             r.put(NOTIFICATION_ID, java.util.UUID.randomUUID().toString());
             return r;
