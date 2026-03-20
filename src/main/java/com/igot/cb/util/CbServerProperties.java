@@ -116,4 +116,8 @@ public class CbServerProperties {
 
   @Value("${cleanup.peer.validation.audit.deletion.prefix}")
   private String cleanupAuditDeletionPrefix;
+  
+  @Value("${mandatory.notification.max.fetch.limit:100}")
+  private int mandatoryNotificationMaxFetchLimit;
+
 }
