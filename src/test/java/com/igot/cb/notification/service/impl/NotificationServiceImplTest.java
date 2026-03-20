@@ -1,5 +1,6 @@
 package com.igot.cb.notification.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -7,6 +8,8 @@ import com.igot.cb.notification.entity.NotificationSettingEntity;
 import com.igot.cb.notification.enums.NotificationReadStatus;
 import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
+import com.igot.cb.producer.Producer;
+import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 
 import org.igot.common.ApiResponse;
@@ -48,6 +51,13 @@ class NotificationServiceImplTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private CbServerProperties cbServerProperties;
+
+    @Mock
+    private Producer producer;
+
     private static final String CREATED_AT = "created_at";
     private static final String READ = "read";
 
@@ -477,7 +487,7 @@ class NotificationServiceImplTest {
         request.put(Constants.TYPE, "invalid");
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
         assertEquals(Constants.FAILED, response.getParams().getStatus());
         assertTrue(response.getParams().getErrMsg().contains("Invalid type"));
@@ -490,7 +500,7 @@ class NotificationServiceImplTest {
         Map<String, Object> request = new HashMap<>();
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
         assertEquals(Constants.FAILED, response.getParams().getStatus());
         assertTrue(response.getParams().getErrMsg().contains("Request type must be provided"));
@@ -505,7 +515,7 @@ class NotificationServiceImplTest {
         request.put("ids", "notalist"); // Invalid ids type
 
         when(accessTokenValidator.fetchUserIdFromAccessToken(authToken)).thenReturn(userId);
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
         assertEquals(Constants.FAILED, response.getParams().getStatus());
         assertTrue(response.getParams().getErrMsg().contains("Missing or invalid 'ids' field"));
@@ -802,7 +812,7 @@ class NotificationServiceImplTest {
                 .thenReturn(successUpdateResponse);
 
         // Call method
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
 
         // Assertions
         assertNotNull(response);
@@ -848,7 +858,7 @@ class NotificationServiceImplTest {
                 .thenReturn(successUpdateResponse);
 
         // Call method
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
 
         // Assertions
         assertNotNull(response);
@@ -1727,7 +1737,7 @@ class NotificationServiceImplTest {
         request.put(Constants.TYPE, Constants.ALL);
         request.put(Constants.ACTION, Constants.GLOBAL);
 
-        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(authToken, request, Constants.API_VERSION_V1);
 
         assertEquals(HttpStatus.OK, response.getResponseCode());
     }
@@ -1853,7 +1863,7 @@ class NotificationServiceImplTest {
         )).thenReturn(new ArrayList<>()); // Simulate fetching global notifications
 
         // Call the method
-        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, Constants.API_VERSION_V1);
 
         // Assert
         assertEquals(HttpStatus.OK, response.getResponseCode());
@@ -1873,7 +1883,7 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
 
         // Call the method
-        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, Constants.API_VERSION_V1);
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
@@ -1890,7 +1900,7 @@ class NotificationServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
 
         // Call the method
-        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, Constants.API_VERSION_V1);
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
@@ -1958,7 +1968,7 @@ class NotificationServiceImplTest {
         }
 
         // Now, simulate the public method markNotificationsAsRead (this invokes the private methods internally)
-        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, Constants.API_VERSION_V1);
 
         // Assert the response
         assertEquals(HttpStatus.OK, response.getResponseCode());
@@ -1966,5 +1976,659 @@ class NotificationServiceImplTest {
         assertNotNull(response.getResult());
         Map<String, Object> finalResult = (Map<String, Object>) response.getResult();
         assertEquals(targetNotifications.size(), ((List<?>) finalResult.get("notifications")).size());
+    }
+    
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_Success() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        when(cassandraOperation.updateRecord(eq(KEYSPACE_SUNBIRD), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(1)).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), argThat(map -> "SUBMITTED".equals(map.get(STATUS))), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)));
+        verify(cassandraOperation, times(1)).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), argThat(map -> "SUBMITTED".equals(map.get(STATUS))), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)));
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_AlreadySubmitted_PeerRecord() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_AlreadySubmitted_UserNotification() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_PeerRecordNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_UserNotificationNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        Instant createdAtInstant = Instant.parse(createdAt);
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), eq(Map.of(USER_ID, userId, "created_at", createdAtInstant)), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), anyMap());
+        verify(cassandraOperation, never()).updateRecord(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_InvalidSubCategory() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_REVIEW_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).getRecordsByProperties(anyString(), anyString(), anyMap(), any(), anyInt());
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_InvalidTimestampFormat() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "invalid-timestamp";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordExists_NotSubmitted() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        List<Map<String, Object>> userNotifRecords = List.of(Map.of(STATUS, "PENDING"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(userNotifRecords);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(2)).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordAlreadySubmitted() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        List<Map<String, Object>> peerRecords = List.of(Map.of(STATUS, "SUBMITTED"));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(peerRecords);
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testValidateRecordExistsAndNotSubmitted_RecordNotFound() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(Collections.emptyList());
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_BothUpdatesSucceed() {
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        String createdAt = "2026-03-10T02:50:00Z";
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(List.of(Map.of(STATUS, "PENDING")));
+        when(cassandraOperation.getRecordsByProperties(eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), eq(List.of(STATUS)), eq(1))).thenReturn(List.of(Map.of(STATUS, "PENDING")));
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap())).thenReturn(Map.of("response", "SUCCESS"));
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, times(2)).updateRecord(eq(KEYSPACE_SUNBIRD), anyString(), argThat(map -> "SUBMITTED".equals(map.get(STATUS)) && map.containsKey("updated_at")), anyMap());
+    }
+    @Test
+    void testUpdatePeerValidationStatusToSubmitted_WithNullValues() {
+        String userId = null;
+        String notificationId = null;
+        String createdAt = null;
+        String subCategory = "PEER_EVALUATION_ASSIGNED";
+        notificationService.updatePeerValidationStatusToSubmitted(userId, notificationId, createdAt, subCategory);
+        verify(cassandraOperation, never()).updateRecord(anyString(), anyString(), anyMap(), anyMap());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_MissingUserId() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("");
+        Map<String, Object> request = Map.of(TYPE, INDIVIDUAL);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+        assertEquals(Constants.USER_ID_DOESNT_EXIST, response.getParams().getErrMsg());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_BlankType() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("user-1");
+        Map<String, Object> request = new HashMap<>();
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+        assertTrue(response.getParams().getErrMsg().contains("type must be provided"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_InvalidType_NonGlobalPath() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("user-1");
+        when(cassandraOperation.getRecordsByProperties(
+                anyString(), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, "unknown_type");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Invalid type"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_MissingIds() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn("user-1");
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("'ids'"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NotificationNotFound_ReturnsSuccess() {
+        String userId = "user-1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), isNull(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NonPeerValidation_Success() {
+        String userId = "user-1";
+        String notificationId = "notif-1";
+        Instant createdAt = Instant.parse("2026-03-10T10:00:00Z");
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(NOTIFICATION_ID, notificationId);
+        notification.put(CREATED_AT, createdAt);
+        notification.put(CATEGORY, "GENERAL");
+        notification.put(SUB_CATEGORY, "INFO");
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(notification));
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of(notificationId));
+        request.put(CREATED_AT, createdAt);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<Map<String, Object>> notifications = (List<Map<String, Object>>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+        assertEquals(notificationId, notifications.get(0).get(ID));
+        assertEquals(true, notifications.get(0).get(READ));
+        assertNotNull(notifications.get(0).get(READ_AT));
+        verify(cassandraOperation).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(m -> Boolean.TRUE.equals(m.get(READ)) && m.containsKey(READ_AT)),
+                argThat(m -> userId.equals(m.get(USER_ID)) && createdAt.equals(m.get(CREATED_AT))));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_PeerValidation_KafkaEventPublished() throws Exception {
+        String userId = "user-1";
+        String notificationId = "notif-1";
+        Instant createdAt = Instant.parse("2026-03-10T10:00:00Z");
+        String formId = "form-abc";
+        String topic = "notification-read-topic";
+        String messageJson = "{\"data\": [{\"formId\": \"form-abc\"}]}";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(NOTIFICATION_ID, notificationId);
+        notification.put(CREATED_AT, createdAt);
+        notification.put(CATEGORY, "PEER_VALIDATION");
+        notification.put(SUB_CATEGORY, "PEER_EVALUATION_ASSIGNED");
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(notification));
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(List.of(Map.of(MESSAGE, messageJson)));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put(DATA, List.of(Map.of(Constants.FORM_ID, formId)));
+        when(objectMapper.readValue(eq(messageJson), ArgumentMatchers.<TypeReference<Map<String, Object>>>any())).thenReturn(messageMap);
+        when(cbServerProperties.getKafkaTopicNotificationReadEvent()).thenReturn(topic);
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of(notificationId));
+        request.put(CREATED_AT, createdAt);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(producer, times(1)).push(eq(topic), argThat(event -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> eventMap = (Map<String, Object>) event;
+            return Constants.PEER_SURVEY_NOTIFICATION_READ_EVENT.equals(eventMap.get(Constants.EVENT_TYPE))
+                    && formId.equals(eventMap.get(Constants.FORM_ID))
+                    && userId.equals(eventMap.get(USER_ID_FIELD));
+        }));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NoPeerSurveyEvent_WhenNotificationRecordNotFound() {
+        String userId = "user-1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(Collections.emptyList());
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        request.put(CREATED_AT, "2026-03-10T10:00:00Z");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(producer, never()).push(anyString(), anyMap());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NoPeerSurveyEvent_WhenMessageIsBlank() throws Exception {
+        String userId = "user-1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(List.of(Map.of(MESSAGE, "")));
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        request.put(CREATED_AT, "2026-03-10T10:00:00Z");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(producer, never()).push(anyString(), anyMap());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NoPeerSurveyEvent_WhenDataListIsEmpty() throws Exception {
+        String userId = "user-1";
+        String messageJson = "{\"data\": []}";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(List.of(Map.of(MESSAGE, messageJson)));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put(DATA, Collections.emptyList());
+        when(objectMapper.readValue(eq(messageJson), ArgumentMatchers.<TypeReference<Map<String, Object>>>any())).thenReturn(messageMap);
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        request.put(CREATED_AT, "2026-03-10T10:00:00Z");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(producer, never()).push(anyString(), anyMap());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_NoPeerSurveyEvent_WhenFormIdIsBlank() throws Exception {
+        String userId = "user-1";
+        String messageJson = "{\"data\": [{\"formId\": \"\"}]}";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(List.of(Map.of(MESSAGE, messageJson)));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put(DATA, List.of(Map.of(Constants.FORM_ID, "")));
+        when(objectMapper.readValue(eq(messageJson), ArgumentMatchers.<TypeReference<Map<String, Object>>>any())).thenReturn(messageMap);
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        request.put(CREATED_AT, "2026-03-10T10:00:00Z");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(producer, never()).push(anyString(), anyMap());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_KafkaPublishException_DoesNotAffectResponse() throws Exception {
+        String userId = "user-1";
+        String formId = "form-xyz";
+        String messageJson = "{\"data\": [{\"formId\": \"form-xyz\"}]}";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), eq(List.of(MESSAGE)), eq(1)))
+                .thenReturn(List.of(Map.of(MESSAGE, messageJson)));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put(DATA, List.of(Map.of(Constants.FORM_ID, formId)));
+        when(objectMapper.readValue(eq(messageJson), ArgumentMatchers.<TypeReference<Map<String, Object>>>any())).thenReturn(messageMap);
+        when(cbServerProperties.getKafkaTopicNotificationReadEvent()).thenReturn("some-topic");
+        doThrow(new RuntimeException("Kafka unavailable")).when(producer).push(anyString(), anyMap());
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of("notif-1"));
+        request.put(CREATED_AT, "2026-03-10T10:00:00Z");
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV1_DelegatesToProcessReadUpdate() {
+        String userId = "user-1";
+        String notificationId = "notif-1";
+        Instant createdAt = Instant.parse("2026-03-10T10:00:00Z");
+        Map<String, Object> existingNotif = new HashMap<>();
+        existingNotif.put(NOTIFICATION_ID, notificationId);
+        existingNotif.put(CREATED_AT, createdAt);
+        existingNotif.put(READ, false);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(existingNotif));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of(notificationId));
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, "V1");
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<Map<String, Object>> notifications = (List<Map<String, Object>>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, notifications.size());
+        assertEquals(notificationId, notifications.get(0).get(ID));
+        assertEquals(true, notifications.get(0).get(READ));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_AllType_MarksAllUserNotifications() {
+        String userId = "user-1";
+        String notifId1 = "notif-1";
+        String notifId2 = "notif-2";
+        Instant createdAt = Instant.parse("2026-03-10T10:00:00Z");
+        Map<String, Object> n1 = new HashMap<>();
+        n1.put(NOTIFICATION_ID, notifId1);
+        n1.put(CREATED_AT, createdAt);
+        n1.put(READ, false);
+        Map<String, Object> n2 = new HashMap<>();
+        n2.put(NOTIFICATION_ID, notifId2);
+        n2.put(CREATED_AT, createdAt);
+        n2.put(READ, false);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(n1, n2));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        Map<String, Object> request = Map.of(TYPE, ALL);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, "V1");
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<Map<String, Object>> notifications = (List<Map<String, Object>>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(2, notifications.size());
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_GlobalActionAllType_InsertsGlobalNotifsAsRead() {
+        String userId = "user-1";
+        String globalNotifId = "global-notif-1";
+        Instant created = Instant.parse("2026-03-01T08:00:00Z");
+        Map<String, Object> globalNotif = new HashMap<>();
+        globalNotif.put(NOTIFICATION_ID, globalNotifId);
+        globalNotif.put(CREATED_AT, created);
+        globalNotif.put(READ, false);
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(globalNotif));
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION), anyMap(), eq(List.of(NOTIFICATION_ID)), anyInt()))
+                .thenReturn(Collections.emptyList());
+        when(cassandraOperation.insertRecord(anyString(), anyString(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, ALL);
+        request.put(ACTION, GLOBAL);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, "V1");
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        assertEquals(Constants.SUCCESS, response.getParams().getStatus());
+        Map<String, Object> result = (Map<String, Object>) response.getResult();
+        List<Map<String, Object>> inserted = (List<Map<String, Object>>) result.get(Constants.NOTIFICATIONS);
+        assertEquals(1, inserted.size());
+        assertEquals(globalNotifId, inserted.get(0).get(ID));
+        assertEquals(true, inserted.get(0).get(READ));
+        verify(cassandraOperation).insertRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(m -> userId.equals(m.get(USER_ID)) && Boolean.TRUE.equals(m.get(READ))));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_GlobalActionIndividualType_NoMatchingGlobals_Returns404() {
+        String userId = "user-1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_GLOBAL_NOTIFICATION), anyMap(), isNull(), anyInt()))
+                .thenReturn(Collections.emptyList());
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put(ACTION, GLOBAL);
+        request.put("ids", List.of("non-existent-id"));
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, "V1");
+        assertEquals(HttpStatus.NOT_FOUND, response.getResponseCode());
+        assertEquals(Constants.FAILED, response.getParams().getStatus());
+        assertTrue(response.getParams().getErrMsg().contains("No matching global notifications"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_GlobalActionInvalidType_ReturnsBadRequest() {
+        String userId = "user-1";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, "bad_type");
+        request.put(ACTION, GLOBAL);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, "V1");
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Invalid type"));
+    }
+
+    @Test
+    void testMarkNotificationsAsRead_IndividualV2_PeerValidation_WithStatus_UpdatesBothTables() {
+        String userId = "user-1";
+        String notificationId = "notif-1";
+        Instant createdAt = Instant.parse("2026-03-10T10:00:00Z");
+        String status = "SKIP_FOR_NOW";
+        when(accessTokenValidator.fetchUserIdFromAccessToken(AUTH_TOKEN)).thenReturn(userId);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(NOTIFICATION_ID, notificationId);
+        notification.put(CREATED_AT, createdAt);
+        notification.put(CATEGORY, "PEER_VALIDATION");
+        notification.put(SUB_CATEGORY, "PEER_EVALUATION_ASSIGNED");
+        when(cassandraOperation.getRecordsByProperties(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                anyMap(), isNull(), anyInt()))
+                .thenReturn(List.of(notification));
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        Map<String, Object> request = new HashMap<>();
+        request.put(TYPE, INDIVIDUAL);
+        request.put("ids", List.of(notificationId));
+        request.put(STATUS, status);
+        request.put(CREATED_AT, createdAt);
+        ApiResponse response = notificationService.markNotificationsAsRead(AUTH_TOKEN, request, API_VERSION_V2);
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(cassandraOperation).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(m -> status.equals(m.get(STATUS)) && Boolean.TRUE.equals(m.get(READ))),
+                argThat(m -> userId.equals(m.get(USER_ID)) && createdAt.equals(m.get(CREATED_AT))));
+        verify(cassandraOperation).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS),
+                argThat(m -> status.equals(m.get(STATUS))),
+                argThat(m -> userId.equals(m.get(USER_ID)) && notificationId.equals(m.get(NOTIFICATION_ID))));
+    }
+
+    @Test
+    void testIsPeerValidationEvaluationAssigned_MatchingCriteria_ReturnsTrue() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("isPeerValidationEvaluationAssigned", Map.class);
+        method.setAccessible(true);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(CATEGORY, "PEER_VALIDATION");
+        notification.put(SUB_CATEGORY, "PEER_EVALUATION_ASSIGNED");
+        boolean result = (boolean) method.invoke(notificationService, notification);
+        assertTrue(result);
+    }
+
+    @Test
+    void testIsPeerValidationEvaluationAssigned_NonMatchingCategory_ReturnsFalse() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("isPeerValidationEvaluationAssigned", Map.class);
+        method.setAccessible(true);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(CATEGORY, "OTHER_CATEGORY");
+        notification.put(SUB_CATEGORY, "PEER_EVALUATION_ASSIGNED");
+        boolean result = (boolean) method.invoke(notificationService, notification);
+        assertFalse(result);
+    }
+
+    @Test
+    void testIsPeerValidationEvaluationAssigned_NonMatchingSubCategory_ReturnsFalse() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("isPeerValidationEvaluationAssigned", Map.class);
+        method.setAccessible(true);
+        Map<String, Object> notification = new HashMap<>();
+        notification.put(CATEGORY, "PEER_VALIDATION");
+        notification.put(SUB_CATEGORY, "OTHER_SUB_CATEGORY");
+        boolean result = (boolean) method.invoke(notificationService, notification);
+        assertFalse(result);
+    }
+
+    @Test
+    void testFindNotificationById_ExistingNotification_ReturnsOptionalWithValue() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("findNotificationById", List.class, String.class);
+        method.setAccessible(true);
+        List<Map<String, Object>> notifications = List.of(
+                Map.of(NOTIFICATION_ID, "notif-1", "data", "value1"),
+                Map.of(NOTIFICATION_ID, "notif-2", "data", "value2")
+        );
+        Optional<Map<String, Object>> result = (Optional<Map<String, Object>>) method.invoke(notificationService, notifications, "notif-1");
+        assertTrue(result.isPresent());
+        assertEquals("value1", result.get().get("data"));
+    }
+
+    @Test
+    void testFindNotificationById_NonExistingNotification_ReturnsEmptyOptional() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("findNotificationById", List.class, String.class);
+        method.setAccessible(true);
+        List<Map<String, Object>> notifications = List.of(
+                Map.of(NOTIFICATION_ID, "notif-1", "data", "value1")
+        );
+        Optional<Map<String, Object>> result = (Optional<Map<String, Object>>) method.invoke(notificationService, notifications, "non-existing");
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testHandleStatusBasedAction_UpdatesBothTables() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleStatusBasedAction", String.class, String.class, Instant.class, Instant.class, String.class);
+        method.setAccessible(true);
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        Instant createdAt = Instant.parse("2026-03-15T10:00:00Z");
+        Instant now = Instant.now();
+        String status = "SKIP_FOR_NOW";
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        method.invoke(notificationService, userId, notificationId, createdAt, now, status);
+        verify(cassandraOperation, times(1)).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(map -> status.equals(map.get(STATUS)) && Boolean.TRUE.equals(map.get("read"))),
+                eq(Map.of(USER_ID, userId, CREATED_AT, createdAt))
+        );
+        verify(cassandraOperation, times(1)).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS),
+                argThat(map -> status.equals(map.get(STATUS))),
+                eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId))
+        );
+    }
+
+    @Test
+    void testHandleNormalReadFlow_UpdatesReadStatusAndPublishesEvent() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleNormalReadFlow", String.class, String.class, Instant.class, Instant.class);
+        method.setAccessible(true);
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        Instant createdAt = Instant.parse("2026-03-15T10:00:00Z");
+        Instant now = Instant.now();
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        when(cassandraOperation.getRecordsByProperties(anyString(), anyString(), anyMap(), anyList(), anyInt()))
+                .thenReturn(List.of(Map.of("message", "{\"data\":[{\"formId\":\"form-123\"}]}")));
+        when(cbServerProperties.getKafkaTopicNotificationReadEvent()).thenReturn("test-topic");
+        method.invoke(notificationService, userId, notificationId, createdAt, now);
+        verify(cassandraOperation, times(1)).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(map -> Boolean.TRUE.equals(map.get("read"))),
+                eq(Map.of(USER_ID, userId, CREATED_AT, createdAt))
+        );
     }
 }

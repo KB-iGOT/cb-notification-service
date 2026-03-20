@@ -6,5 +6,6 @@ public enum NotificationCategory {
     EVENT,
     NETWORK,
     PROFILE,
-    CONTENT
+    CONTENT,
+    PEER_VALIDATION
 }
