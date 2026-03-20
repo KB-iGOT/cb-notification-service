@@ -1,5 +1,6 @@
 package com.igot.cb.util;
 
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,6 +48,75 @@ public class CbServerProperties {
   @Value("${spring.kafka.bootstrap.servers}")
   private String springKafkaBootStrapServers;
 
+  @Value("${peervalidation.bulk.user.notification.limit}")
+  private int peerValidationBulkUserNotificationLimit;
+
+  @Value("${peervalidation.notification.setting.check.enabled}")
+  private boolean peerValidationNotificationSettingCheckEnabled;
+
+  @Value("${peervalidation.list.max.fetch}")
+  private int peerValidationListMaxFetch;
+
+  @Value("${kafka.topic.process.peer.validation.error}")
+  private String kafkaTopicPeerValidationError;
+
+  @Value("${kafka.topic.notification.read.event}")
+  private String kafkaTopicNotificationReadEvent;
+
+  @Value("${peervalidation.bulk.created.at.offset.ms}")
+  private long peerValidationBulkCreatedAtOffsetMs;
+
+  @Value("${kafka.topic.process.peer.evaluation.error}")
+  private String kafkaTopicPeerEvaluationError;
+
+  @Value("${kafka.topic.notification.bulk.create.error}")
+  private String kafkaTopicNotificationBulkCreateError;
+
+  @Value("#{'${notification.list.peer.evaluation.assigned.excluded.statuses}'.split(',')}")
+  private List<String> peerEvaluationAssignedExcludedStatuses;
+
+  @Value("#{'${notification.list.peer.review.assigned.excluded.statuses}'.split(',')}")
+  private List<String> peerReviewAssignedExcludedStatuses;
+
+  @Value("${cleanup.peer.validation.consumer.group.id}")
+  private String cleanupConsumerGroupId;
+
+  @Value("${cleanup.peer.validation.kafka.topics}")
+  private String cleanupKafkaTopics;
+
+  @Value("${cleanup.peer.validation.batch.size}")
+  private int cleanupBatchSize;
+
+  @Value("${cleanup.peer.validation.thread.pool.size}")
+  private int cleanupThreadPoolSize;
+
+  @Value("${cleanup.peer.validation.table.requests}")
+  private String cleanupTableRequests;
+
+  @Value("${cleanup.peer.validation.table.reviews}")
+  private String cleanupTableReviews;
+
+  @Value("${cleanup.peer.validation.table.audit}")
+  private String cleanupTableAudit;
+
+  @Value("${cleanup.peer.validation.window.start.time}")
+  private String cleanupWindowStartTime;
+
+  @Value("${cleanup.peer.validation.window.end.time}")
+  private String cleanupWindowEndTime;
+
+  @Value("${cleanup.peer.validation.day.offset}")
+  private long cleanupDayOffset;
+
+  @Value("${cleanup.peer.validation.poll.timeout.seconds}")
+  private int cleanupPollTimeoutSeconds;
+
+  @Value("${cleanup.peer.validation.executor.shutdown.timeout.minutes}")
+  private int cleanupExecutorShutdownTimeoutMinutes;
+
+  @Value("${cleanup.peer.validation.audit.deletion.prefix}")
+  private String cleanupAuditDeletionPrefix;
+  
   @Value("${mandatory.notification.max.fetch.limit:100}")
   private int mandatoryNotificationMaxFetchLimit;
 
