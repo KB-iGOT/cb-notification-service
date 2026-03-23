@@ -1856,7 +1856,10 @@ public class NotificationServiceImpl implements NotificationService {
         if (!isPeerValidationEvaluationAssigned(notification)) {
             return handleNonPeerValidationRead(userId, notification, request, response);
         }
-        Instant createdAt = (Instant) request.get(CREATED_AT);
+        Object createdAtRaw = request.get(CREATED_AT);
+        Instant createdAt = (createdAtRaw instanceof Instant instant)
+                ? instant
+                : Instant.parse((String) createdAtRaw);
         if (StringUtils.isNotBlank((String) request.get(STATUS))) {
             handleStatusBasedAction(userId, notificationId, createdAt, now, (String) request.get(STATUS));
         } else {
