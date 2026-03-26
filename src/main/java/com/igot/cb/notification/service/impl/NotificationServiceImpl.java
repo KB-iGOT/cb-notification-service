@@ -1423,11 +1423,15 @@ public class NotificationServiceImpl implements NotificationService {
 
             Map<String, Object> notificationRecord = buildNotificationRecord(
                     notificationId, userId, notificationType, request, createdAt);
-            Map<String, Object> actionRecord = buildActionRecord(
-                    notificationId, userId, request, surveyData, createdAt);
-
             eligibleNotifications.add(notificationRecord);
-            actionRecords.add(actionRecord);
+            // Only create action records for peer validation sub-categories - Not eligible for Badges or other categories.
+            String subCategory = (String) request.get(SUB_CATEGORY);
+            if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)
+                    || SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategory)) {
+                Map<String, Object> actionRecord = buildActionRecord(
+                        notificationId, userId, request, surveyData, createdAt);
+                actionRecords.add(actionRecord);
+            }
         } catch (Exception e) {
             log.error("Failed to build records for user '{}': {}", userId, e.getMessage(), e);
             failures.add(Map.of(USER_ID, userId,
