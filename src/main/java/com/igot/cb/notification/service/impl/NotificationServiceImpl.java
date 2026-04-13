@@ -2104,7 +2104,10 @@ public class NotificationServiceImpl implements NotificationService {
     private ApiResponse handleNonPeerValidationRead(String userId, Map<String, Object> notification, 
             Map<String, Object> request, ApiResponse response) {
         String notificationId = (String) notification.get(NOTIFICATION_ID);
-        Instant createdAt = (Instant) request.get(CREATED_AT);
+        Object createdAtRaw = request.get(CREATED_AT);
+        Instant createdAt = (createdAtRaw instanceof Instant instant)
+                ? instant
+                : Instant.parse((String) createdAtRaw);
         Instant now = Instant.now();
         cassandraOperation.updateRecord(
                 KEYSPACE_SUNBIRD,
