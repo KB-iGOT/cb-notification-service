@@ -860,7 +860,7 @@ class BulkPeerValidationNotificationTest {
         }
 
         @Test
-        @DisplayName("already-read non-peer notification → 200 OK with 'already marked' message")
+        @DisplayName("already-read non-peer notification → 200 OK with standard success message")
         void alreadyRead_nonPeerValidation_returnsAlreadyMarkedResponse() {
             Map<String, Object> alreadyRead = buildNotification(
                     true, "OTHER_CATEGORY", "OTHER_SUB");
@@ -870,7 +870,7 @@ class BulkPeerValidationNotificationTest {
             ApiResponse res = notificationService.markNotificationsAsRead(
                     V2_TOKEN, buildMarkReadRequest(), Constants.API_VERSION_V2);
             assertEquals(HttpStatus.OK, res.getResponseCode());
-            assertEquals("Notification is already marked as read", res.getParams().getErrMsg());
+            assertEquals("Notifications updated successfully", res.getParams().getErrMsg());
         }
 
         @Test
