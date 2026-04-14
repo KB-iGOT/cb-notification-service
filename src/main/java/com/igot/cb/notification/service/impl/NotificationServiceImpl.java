@@ -1853,10 +1853,6 @@ public class NotificationServiceImpl implements NotificationService {
             return buildReadSuccessResponse(response, notificationId, now);
         }
         Map<String, Object> notification = notificationOpt.get();
-        if (Boolean.TRUE.equals(notification.get(READ))) {
-            log.info("Notification already read: userId={}, notificationId={}", userId, notificationId);
-            return buildAlreadyReadResponse(response, notificationId);
-        }
         if (!isPeerValidationEvaluationAssigned(notification)) {
             return handleNonPeerValidationRead(userId, notification, request, response);
         }
@@ -1867,6 +1863,10 @@ public class NotificationServiceImpl implements NotificationService {
         if (StringUtils.isNotBlank((String) request.get(STATUS))) {
             handleStatusBasedAction(userId, notificationId, createdAt, now, (String) request.get(STATUS));
         } else {
+            if (Boolean.TRUE.equals(notification.get(READ))) {
+                log.info("Notification already read: userId={}, notificationId={}", userId, notificationId);
+                return buildAlreadyReadResponse(response, notificationId);
+            }
             handleNormalReadFlow(userId, notificationId, createdAt, now);
         }
         log.info("Notification marked as read: userId={}, notificationId={}", userId, notificationId);
