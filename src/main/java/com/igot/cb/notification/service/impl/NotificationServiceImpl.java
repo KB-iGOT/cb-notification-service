@@ -2026,7 +2026,8 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     /**
-     * Checks if a notification matches PEER_VALIDATION category and PEER_EVALUATION_ASSIGNED sub_category.
+     * Checks if a notification matches PEER_VALIDATION category and either
+     * PEER_EVALUATION_ASSIGNED or PEER_REVIEW_ASSIGNED sub_category.
      *
      * @param notification the notification to check
      * @return true if the notification matches the peer validation criteria
@@ -2035,7 +2036,8 @@ public class NotificationServiceImpl implements NotificationService {
         String category = (String) notification.get(CATEGORY);
         String subCategory = (String) notification.get(SUB_CATEGORY);
         return CATEGORY_PEER_VALIDATION.equalsIgnoreCase(category)
-                && SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory);
+                && (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)
+                || SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategory));
     }
 
     /**
