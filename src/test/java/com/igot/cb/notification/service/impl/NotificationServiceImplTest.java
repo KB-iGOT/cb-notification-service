@@ -2588,8 +2588,8 @@ class NotificationServiceImplTest {
     }
 
     @Test
-    void testHandleStatusBasedAction_UpdatesBothTables() throws Exception {
-        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleStatusBasedAction", String.class, String.class, Instant.class, Instant.class, String.class);
+    void testHandleStatusBasedAction_UpdatesBothTables_EvaluationAssigned() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleStatusBasedAction", String.class, String.class, Instant.class, Instant.class, String.class, String.class);
         method.setAccessible(true);
         String userId = "user-123";
         String notificationId = "notif-456";
@@ -2598,7 +2598,7 @@ class NotificationServiceImplTest {
         String status = "SKIP_FOR_NOW";
         when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
                 .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
-        method.invoke(notificationService, userId, notificationId, createdAt, now, status);
+        method.invoke(notificationService, userId, notificationId, createdAt, now, status, Constants.SUB_CATEGORY_PEER_EVALUATION_ASSIGNED);
         verify(cassandraOperation, times(1)).updateRecord(
                 eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
                 argThat(map -> status.equals(map.get(STATUS)) && Boolean.TRUE.equals(map.get("read"))),
@@ -2606,6 +2606,30 @@ class NotificationServiceImplTest {
         );
         verify(cassandraOperation, times(1)).updateRecord(
                 eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REQUESTS),
+                argThat(map -> status.equals(map.get(STATUS))),
+                eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId))
+        );
+    }
+
+    @Test
+    void testHandleStatusBasedAction_UpdatesBothTables_ReviewAssigned() throws Exception {
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleStatusBasedAction", String.class, String.class, Instant.class, Instant.class, String.class, String.class);
+        method.setAccessible(true);
+        String userId = "user-123";
+        String notificationId = "notif-456";
+        Instant createdAt = Instant.parse("2026-03-15T10:00:00Z");
+        Instant now = Instant.now();
+        String status = "SKIP_FOR_NOW";
+        when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap(), anyMap()))
+                .thenReturn(Map.of(RESPONSE, Constants.SUCCESS));
+        method.invoke(notificationService, userId, notificationId, createdAt, now, status, Constants.SUB_CATEGORY_PEER_REVIEW_ASSIGNED);
+        verify(cassandraOperation, times(1)).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
+                argThat(map -> status.equals(map.get(STATUS)) && Boolean.TRUE.equals(map.get("read"))),
+                eq(Map.of(USER_ID, userId, CREATED_AT, createdAt))
+        );
+        verify(cassandraOperation, times(1)).updateRecord(
+                eq(KEYSPACE_SUNBIRD), eq(TABLE_PEER_VALIDATION_REVIEWS),
                 argThat(map -> status.equals(map.get(STATUS))),
                 eq(Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId))
         );

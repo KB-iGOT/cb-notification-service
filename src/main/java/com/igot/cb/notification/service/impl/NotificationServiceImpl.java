@@ -1861,7 +1861,7 @@ public class NotificationServiceImpl implements NotificationService {
                 ? instant
                 : Instant.parse((String) createdAtRaw);
         if (StringUtils.isNotBlank((String) request.get(STATUS))) {
-            handleStatusBasedAction(userId, notificationId, createdAt, now, (String) request.get(STATUS));
+            handleStatusBasedAction(userId, notificationId, createdAt, now, (String) request.get(STATUS), (String) notification.get(SUB_CATEGORY));
         } else {
             if (Boolean.TRUE.equals(notification.get(READ))) {
                 log.info("Notification already read: userId={}, notificationId={}", userId, notificationId);
@@ -2042,18 +2042,28 @@ public class NotificationServiceImpl implements NotificationService {
 
     /**
      * Handles status-based actions (e.g., NO, SKIP_FOR_NOW) by updating both tables.
+     * Routes to {@code peer_validation_requests} for PEER_EVALUATION_ASSIGNED
+     * or {@code peer_validation_reviews} for PEER_REVIEW_ASSIGNED.
      *
      * @param userId         the user ID
      * @param notificationId the notification ID
      * @param createdAt      the notification's created_at timestamp
      * @param now            the current timestamp
      * @param status         the status to set (e.g., NO, SKIP_FOR_NOW)
+     * @param subCategory    the sub_category of the notification
      */
-    private void handleStatusBasedAction(String userId, String notificationId, 
-            Instant createdAt, Instant now, String status) {
+    private void handleStatusBasedAction(String userId, String notificationId,
+            Instant createdAt, Instant now, String status, String subCategory) {
         updateUserNotificationWithStatus(userId, createdAt, now, status);
-        updatePeerValidationRequestWithStatus(userId, notificationId, now, status);
-        log.info("Status updated: userId={}, notificationId={}, status={}", userId, notificationId, status);
+        if (SUB_CATEGORY_PEER_REVIEW_ASSIGNED.equalsIgnoreCase(subCategory)) {
+            log.info("Updating peer_validation_reviews for userId={}, notificationId={}, status={}", userId, notificationId, status);
+            updatePeerValidationReviewWithStatus(userId, notificationId, now, status);
+        } else if (SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)) {
+            log.info("Updating peer_validation_requests for userId={}, notificationId={}, status={}", userId, notificationId, status);
+            updatePeerValidationRequestWithStatus(userId, notificationId, now, status);
+        }
+        log.info("Status updated: userId={}, notificationId={}, status={}, subCategory={}",
+                userId, notificationId, status, subCategory);
     }
 
     /**
@@ -2394,4 +2404,16 @@ public class NotificationServiceImpl implements NotificationService {
         }
     }
 
+
+    /**
+     * Updates the peer_validation_reviews table with status and action timestamp.
+     */
+    private void updatePeerValidationReviewWithStatus(String userId, String notificationId, Instant now, String status) {
+        cassandraOperation.updateRecord(
+                KEYSPACE_SUNBIRD,
+                TABLE_PEER_VALIDATION_REVIEWS,
+                Map.of(STATUS, status, UPDATED_AT, now),
+                Map.of(USER_ID, userId, NOTIFICATION_ID, notificationId)
+        );
+    }
 }
