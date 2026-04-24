@@ -2637,7 +2637,7 @@ class NotificationServiceImplTest {
 
     @Test
     void testHandleNormalReadFlow_UpdatesReadStatusAndPublishesEvent() throws Exception {
-        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleNormalReadFlow", String.class, String.class, Instant.class, Instant.class);
+        Method method = NotificationServiceImpl.class.getDeclaredMethod("handleNormalReadFlow", String.class, String.class, Instant.class, Instant.class, String.class);
         method.setAccessible(true);
         String userId = "user-123";
         String notificationId = "notif-456";
@@ -2648,7 +2648,7 @@ class NotificationServiceImplTest {
         when(cassandraOperation.getRecordsByProperties(anyString(), anyString(), anyMap(), anyList(), anyInt()))
                 .thenReturn(List.of(Map.of("message", "{\"data\":[{\"formId\":\"form-123\"}]}")));
         when(cbServerProperties.getKafkaTopicNotificationReadEvent()).thenReturn("test-topic");
-        method.invoke(notificationService, userId, notificationId, createdAt, now);
+        method.invoke(notificationService, userId, notificationId, createdAt, now, SUB_CATEGORY_PEER_EVALUATION_ASSIGNED);
         verify(cassandraOperation, times(1)).updateRecord(
                 eq(KEYSPACE_SUNBIRD), eq(TABLE_USER_NOTIFICATION),
                 argThat(map -> Boolean.TRUE.equals(map.get("read"))),
