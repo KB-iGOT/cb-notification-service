@@ -1867,7 +1867,7 @@ public class NotificationServiceImpl implements NotificationService {
                 log.info("Notification already read: userId={}, notificationId={}", userId, notificationId);
                 return buildAlreadyReadResponse(response, notificationId);
             }
-            handleNormalReadFlow(userId, notificationId, createdAt, now);
+            handleNormalReadFlow(userId, notificationId, createdAt, now, (String) notification.get(SUB_CATEGORY));
         }
         log.info("Notification marked as read: userId={}, notificationId={}", userId, notificationId);
         return buildReadSuccessResponse(response, notificationId, now);
@@ -2098,8 +2098,12 @@ public class NotificationServiceImpl implements NotificationService {
      * @param createdAt      the notification's created_at timestamp
      * @param now            the current timestamp
      */
-    private void handleNormalReadFlow(String userId, String notificationId, Instant createdAt, Instant now) {
+    private void handleNormalReadFlow(String userId, String notificationId, Instant createdAt, Instant now, String subCategory) {
         updateNotificationReadStatus(userId, createdAt, now);
+        if (!SUB_CATEGORY_PEER_EVALUATION_ASSIGNED.equalsIgnoreCase(subCategory)) {
+            log.info("publishPeerSurveyReadEvent: skipping for subCategory={}, notificationId={}", subCategory, notificationId);
+            return;
+        }
         publishPeerSurveyReadEvent(userId, notificationId, createdAt, now);
     }
 
