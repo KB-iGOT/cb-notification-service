@@ -120,4 +120,22 @@ public class CbServerProperties {
   @Value("${mandatory.notification.max.fetch.limit:100}")
   private int mandatoryNotificationMaxFetchLimit;
 
+  @Value("${forms.es.index.alias}")
+  private String formsEsIndexAlias;
+
+  @Value("${forms.es.context.type}")
+  private String formsEsContextType;
+
+  @Value("#{'${forms.es.fetch.fields}'.split(',')}")
+  private List<String> formsEsFetchFields;
+
+  @Value("${forms.es.fetch.batch.size}")
+  private int formsEsFetchBatchSize;
+
+  @Value("${forms.cache.ttl.seconds}")
+  private long formsCacheTtlSeconds;
+
+  @Value("${forms.cache.max.size}")
+  private long formsCacheMaxSize;
+
 }

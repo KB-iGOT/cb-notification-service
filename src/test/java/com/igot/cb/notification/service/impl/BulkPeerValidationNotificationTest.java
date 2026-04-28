@@ -3,6 +3,7 @@ package com.igot.cb.notification.service.impl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.notification.entity.NotificationSettingEntity;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
+import com.igot.cb.notification.service.FormExpiryValidator;
 import com.igot.cb.producer.Producer;
 import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
@@ -46,6 +47,9 @@ class BulkPeerValidationNotificationTest {
 
     @Mock
     private Producer producer;
+
+    @Mock
+    private FormExpiryValidator formExpiryValidator;
 
     private final ObjectMapper realMapper = new ObjectMapper();
 
@@ -608,6 +612,19 @@ class BulkPeerValidationNotificationTest {
                     .thenReturn(List.of("SUBMITTED", "IGNORED"));
             when(cbServerProperties.getPeerReviewAssignedExcludedStatuses())
                     .thenReturn(List.of("APPROVED", "REJECTED"));
+            doAnswer(invocation -> {
+                List<Map<String, Object>> recs = invocation.getArgument(0);
+                Instant now = Instant.now();
+                recs.forEach(r -> {
+                    if (STATUS_PENDING.equalsIgnoreCase((String) r.get(Constants.STATUS))) {
+                        Object sed = r.get(Constants.SURVEY_END_DATE);
+                        if (sed instanceof Instant && ((Instant) sed).isBefore(now)) {
+                            r.put(Constants.STATUS, STATUS_EXPIRED);
+                        }
+                    }
+                });
+                return recs;
+            }).when(formExpiryValidator).validateAndMarkExpired(anyList());
         }
         private Map<String, Object> buildRecord(String status, Instant createdAt) {
             Map<String, Object> r = new HashMap<>();
