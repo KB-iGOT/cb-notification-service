@@ -562,6 +562,17 @@ public class Constants {
     public static final String ERR_UPDATING_NOTIFICATION = "Internal server error while updating notification";
     public static final String TABLE_MANDATORY_NOTIFICATION = "mandatory_notifications";
 
+    public static final String ES_HTTP_SCHEME = "http";
+    public static final String ES_PRODUCT_HEADER = "X-Elastic-Product";
+    public static final String ES_PRODUCT_HEADER_VALUE = "Elasticsearch";
+    public static final String ES_MGET_UNKNOWN_REASON = "unknown";
+    public static final String ES_LOG_INVALID_INPUT =
+            "readDocuments skipped: invalid input (index='{}', idCount={})";
+    public static final String ES_LOG_MGET_FAILURE =
+            "mget failure for index [{}] id [{}]: {}";
+    public static final String ES_LOG_READ_ERROR =
+            "Error reading documents from ES for index [{}]: {}";
+    public static final String END_DATE = "endDate";
     private Constants() {
     }
 }

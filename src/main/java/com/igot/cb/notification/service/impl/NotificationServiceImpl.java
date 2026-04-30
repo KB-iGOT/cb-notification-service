@@ -12,6 +12,7 @@ import com.igot.cb.notification.enums.NotificationSubCategory;
 import com.igot.cb.notification.enums.NotificationSubType;
 import com.igot.cb.notification.enums.NotificationType;
 import com.igot.cb.notification.repository.NotificationSettingRepository;
+import com.igot.cb.notification.service.FormExpiryValidator;
 import com.igot.cb.notification.service.NotificationService;
 import com.igot.cb.producer.Producer;
 import com.igot.cb.util.CbServerProperties;
@@ -48,15 +49,17 @@ public class NotificationServiceImpl implements NotificationService {
     private NotificationSettingRepository notificationSettingRepository;
     private CbServerProperties cbServerProperties;
     private Producer producer;
+    private FormExpiryValidator formExpiryValidator;
     public NotificationServiceImpl(AccessTokenValidator accessTokenValidator, CassandraOperation cassandraOperation,
             ObjectMapper objectMapper, NotificationSettingRepository notificationSettingRepository,
-            CbServerProperties cbServerProperties, Producer producer) {
+            CbServerProperties cbServerProperties, Producer producer, FormExpiryValidator formExpiryValidator) {
         this.accessTokenValidator = accessTokenValidator;
         this.cassandraOperation = cassandraOperation;
         this.objectMapper = objectMapper;
         this.notificationSettingRepository = notificationSettingRepository;
         this.cbServerProperties = cbServerProperties;
         this.producer = producer;
+        this.formExpiryValidator = formExpiryValidator;
     }
 
     private final Logger logger = LoggerFactory.getLogger(NotificationServiceImpl.class);
@@ -2312,39 +2315,13 @@ public class NotificationServiceImpl implements NotificationService {
                 records.size(), fromDate, excludedStatuses);
         Set<String> exclusionSet = CollectionUtils.isEmpty(excludedStatuses)
                 ? Collections.emptySet() : new HashSet<>(excludedStatuses);
-        Instant now = Instant.now();
-        records.forEach(r -> markAsExpiredIfEligible(r, now));
+        formExpiryValidator.validateAndMarkExpired(records);
         List<Map<String, Object>> result = records.stream()
                 .filter(r -> isWithinDateWindow(r, fromDate) && isStatusAllowed(r, exclusionSet))
                 .sorted(Comparator.comparing(r -> getInstant(r.get(SURVEY_END_DATE))))
                 .toList();
         log.debug("filterSortAndLimit: output={} records after filtering and sorting", result.size());
         return result;
-    }
-
-    /**
-     * Mutates a single record in-memory by setting its {@code status} to {@code EXPIRED}
-     * when all of the following hold:
-     * <ul>
-     *   <li>The current status is {@code PENDING} (case-insensitive).</li>
-     *   <li>A {@code survey_end_date} is present on the record.</li>
-     *   <li>{@code survey_end_date} is strictly before {@code now}.</li>
-     * </ul>
-     * Non-PENDING records are skipped immediately. No Cassandra write is performed.
-     *
-     * @param record the peer-validation record map to evaluate and potentially mutate
-     * @param now    the reference instant used as the expiry threshold
-     */
-    private void markAsExpiredIfEligible(Map<String, Object> notifRecord, Instant now) {
-        if (!Constants.STATUS_PENDING.equalsIgnoreCase((String) notifRecord.get(STATUS))) {
-            return;
-        }
-        Instant surveyEndDate = getInstant(notifRecord.get(SURVEY_END_DATE));
-        if (!ObjectUtils.isEmpty(surveyEndDate) && surveyEndDate.isBefore(now)) {
-            notifRecord.put(STATUS, Constants.STATUS_EXPIRED);
-            log.info("Marked record as EXPIRED in-memory: userId={}, notificationId={}",
-                    notifRecord.get(USER_ID), notifRecord.get(NOTIFICATION_ID));
-        }
     }
 
     /**
