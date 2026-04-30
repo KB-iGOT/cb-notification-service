@@ -16,12 +16,13 @@ import org.elasticsearch.client.RestClientBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.util.Arrays;
 
 @Configuration
 public class EsClientConfig {
 
-    @Value("${elasticsearch.host}")
-    private String elasticsearchHost;
+    @Value("${elasticsearch.hosts}")
+    private String elasticsearchHosts;
 
     @Value("${elasticsearch.port}")
     private int elasticsearchPort;
@@ -38,8 +39,12 @@ public class EsClientConfig {
         credentialsProvider.setCredentials(AuthScope.ANY,
                 new UsernamePasswordCredentials(elasticsearchUsername, elasticsearchPassword));
 
-        RestClientBuilder builder = RestClient.builder(
-                        new HttpHost(elasticsearchHost, elasticsearchPort, Constants.ES_HTTP_SCHEME))
+        HttpHost[] httpHosts = Arrays.stream(elasticsearchHosts.split(","))
+                .map(String::trim)
+                .map(host -> new HttpHost(host, elasticsearchPort, Constants.ES_HTTP_SCHEME))
+                .toArray(HttpHost[]::new);
+
+        RestClientBuilder builder = RestClient.builder(httpHosts)
                 .setHttpClientConfigCallback(httpClientBuilder -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider).addInterceptorLast((HttpResponseInterceptor) (response, context) ->
                         response.addHeader(Constants.ES_PRODUCT_HEADER, Constants.ES_PRODUCT_HEADER_VALUE)))
                 .setDefaultHeaders(new org.apache.http.Header[]{
