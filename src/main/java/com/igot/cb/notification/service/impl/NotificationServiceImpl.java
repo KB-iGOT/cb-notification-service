@@ -551,6 +551,12 @@ public class NotificationServiceImpl implements NotificationService {
                 }
             }
 
+            List<Map<String, Object>> peerValidationNotifs = merged.stream()
+                    .filter(n -> CATEGORY_PEER_VALIDATION.equalsIgnoreCase((String) n.get(CATEGORY)))
+                    .collect(Collectors.toList());
+            if (!peerValidationNotifs.isEmpty()) {
+                formExpiryValidator.validateAndMarkExpired(peerValidationNotifs);
+            }
             List<Map<String, Object>> mergedFiltered = merged.stream()
                     .filter(n -> {
                         Instant createdAt = getInstant(n.get(CREATED_AT));
