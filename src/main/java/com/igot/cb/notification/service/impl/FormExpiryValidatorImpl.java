@@ -155,10 +155,10 @@ public class FormExpiryValidatorImpl implements FormExpiryValidator {
         return endDate != null && endDate < now;
     }
 
-    /** Parses the JSON {@code metadata} field to extract {@code formId}; returns {@code null} on absent, blank, or malformed input. */
+    /** Parses the JSON {@code metadata} field to extract {@code formId}; falls back to {@code message.data[0].formId} for {@code notifications} table records. Returns {@code null} on absent, blank, or malformed input. */
     private String extractFormId(Map<String, Object> notification) {
         if (!(notification.get(Constants.METADATA) instanceof String metaStr) || metaStr.isBlank()) {
-            return null;
+            return extractFormIdFromMessage(notification);
         }
         try {
             Map<String, Object> metaMap = objectMapper.readValue(metaStr, new TypeReference<>() {});
@@ -168,7 +168,8 @@ public class FormExpiryValidatorImpl implements FormExpiryValidator {
         } catch (Exception e) {
             log.warn("Failed to parse metadata for notification [{}]", notification.get(Constants.NOTIFICATION_ID));
         }
-        return null;
+        // Fallback: notifications table stores formId inside message.data[0].formId
+        return extractFormIdFromMessage(notification);
     }
 
     /** Filters records to those with PENDING status (case-insensitive). */
@@ -203,5 +204,23 @@ public class FormExpiryValidatorImpl implements FormExpiryValidator {
             return Optional.of(nested.longValue());
         }
         return Optional.empty();
+    }
+
+    /** Parses the JSON {@code message} field to extract {@code formId} from {@code data[0]}; returns {@code null} on absent, blank, or malformed input. */
+    private String extractFormIdFromMessage(Map<String, Object> notification) {
+        if (!(notification.get(Constants.MESSAGE) instanceof String msgStr) || msgStr.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> msgMap = objectMapper.readValue(msgStr, new TypeReference<>() {});
+            if (msgMap.get(Constants.DATA) instanceof List<?> dataList && !dataList.isEmpty()
+                    && dataList.get(0) instanceof Map<?, ?> firstEntry
+                    && firstEntry.get(Constants.FORM_ID) instanceof String formId) {
+                return formId;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse message for notification [{}]", notification.get(Constants.NOTIFICATION_ID));
+        }
+        return null;
     }
 }
