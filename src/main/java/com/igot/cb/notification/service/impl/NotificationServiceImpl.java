@@ -553,7 +553,7 @@ public class NotificationServiceImpl implements NotificationService {
 
             List<Map<String, Object>> peerValidationNotifs = merged.stream()
                     .filter(n -> CATEGORY_PEER_VALIDATION.equalsIgnoreCase((String) n.get(CATEGORY)))
-                    .collect(Collectors.toList());
+                    .toList();
             if (!peerValidationNotifs.isEmpty()) {
                 formExpiryValidator.validateAndMarkExpired(peerValidationNotifs);
             }
