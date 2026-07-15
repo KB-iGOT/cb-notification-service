@@ -116,7 +116,9 @@ public enum NotificationSubCategory {
     PEER_REVIEW_ASSIGNED(false),
     AWARD_BADGES(false),
     AWARD_BADGES_REMINDER(false),
-    EXTERNAL_TRAINING(false);
+    EXTERNAL_TRAINING(false),
+    CONTENT_UN_ENROLLED(false),
+    CONTENT_RE_ENROLLED(false);
     private boolean shouldClub;
 
     public String messageTemplate() {
