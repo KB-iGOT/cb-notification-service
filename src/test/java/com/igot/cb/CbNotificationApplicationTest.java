@@ -30,3 +30,4 @@ class CbNotificationApplicationTest {
         assertNotNull(httpClient);
     }
 }
+// PR validation test update
