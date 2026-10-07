@@ -101,6 +101,7 @@ public enum NotificationSubCategory {
     BP_ASSIGNMENT_EVALUATE(false),
     BP_ASSIGNMENT_SUBMIT(false),
     INSTRUCTOR_ADD_BATCH(false),
+    PROGRAM_COORDINATOR_ADDED(false),
     PUBLISHED_NEW_VERSION(false),
     RETIRED(false),
     RETIRE_SCHEDULED(false),
