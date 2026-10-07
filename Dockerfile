@@ -1,7 +1,6 @@
 FROM openjdk:17.0.1-jdk-slim
 
 RUN useradd -ms /bin/bash appuser
-
 RUN apt-get update \
     && apt-get install -y \
         curl \
@@ -15,7 +14,6 @@ RUN apt-get update \
 
 
 COPY cb-notification-service-1.0-SNAPSHOT.jar /opt/
-
 RUN chown -R appuser:appuser /opt
 USER appuser
 WORKDIR /opt
