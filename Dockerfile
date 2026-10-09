@@ -1,12 +1,10 @@
-FROM openjdk:17.0.1-jdk-slim
+FROM eclipse-temurin:17-jdk
 
 RUN useradd -ms /bin/bash appuser
-
 RUN apt-get update \
     && apt-get install -y \
         curl \
         libxrender1 \
-        libjpeg62-turbo \
         fontconfig \
         libxtst6 \
         xfonts-75dpi \
@@ -15,7 +13,6 @@ RUN apt-get update \
 
 
 COPY cb-notification-service-1.0-SNAPSHOT.jar /opt/
-
 RUN chown -R appuser:appuser /opt
 USER appuser
 WORKDIR /opt
